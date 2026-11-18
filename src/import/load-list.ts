@@ -73,9 +73,10 @@ export function detectColumns(headers:readonly string[]):Mapping {
 }
 export function bestHeader(rows:readonly string[][]):number {let best=0,score=0;for(let i=0;i<Math.min(25,rows.length);i++){const n=Object.keys(detectColumns(rows[i]??[])).length;if(n>score){score=n;best=i;}}return best;}
 // Starter words seen in load lists, by the sheet's list entry. "-", N/A or None mean no starter (not a motor).
-const STARTER_WORDS:[RegExp,string][]=[[/^(dol|directonline|direct)$/,'DOL'],[/^(stardelta|sd|yd|ydelta|wyedelta|y[δ∆])$/,'Star-delta'],[/^(softstarter|softstart|soft|ss)$/,'Soft starter'],[/^(vfd|vsd|inverter|drive|variablefrequencydrive|variablespeeddrive|frequencyconverter)$/,'VFD']];
+const STARTER_WORDS:[RegExp,string][]=[[/^(dol|directonline|direct)$/,'DOL'],[/^(stardelta|sd|yd|ydelta|wyedelta|y[δ∆])$/,'Star-delta'],[/^(softstarter|softstart|soft|ss)$/,'Soft starter'],[/^(vfd|vsd|vsdvfd|vfdvsd|inverter|drive|variablefrequencydrive|variablespeeddrive|frequencyconverter)$/,'VFD']];
 function cleanStarter(v:string):string {
- const key=(s:string)=>s.toLowerCase().replace(/[\s./\\_-]/g,''),k=key(v),options=listOptions(emptyRow()).BP;if(!k||/^(na|none|nil|no|0)$/.test(k))return '';
+ const key=(s:string)=>s.toLowerCase().replace(/[\s./\\_-]/g,''),k=key(v),options=listOptions(emptyRow()).BP;// A power feeder (PWR FDR) supplies a board, not a motor: no starting check.
+ if(!k||/^(na|none|nil|no|0|pwrfdr|powerfeeder|feeder|fdr)$/.test(k))return '';
  const word=options.find(o=>key(o)===k)??STARTER_WORDS.find(([re])=>re.test(k))?.[1];return word&&options.includes(word)?word:v;
 }
 function cleanNumber(col:InputCol,raw:string):string {

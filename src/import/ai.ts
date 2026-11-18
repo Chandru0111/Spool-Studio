@@ -62,6 +62,21 @@ export async function askAi(s:AiSettings,text:readonly string[],signal?:AbortSig
  return aiCandidates(await chat(s,[{role:'user',content:aiPrompt(text)}],signal),text);
 }
 
+// Datasheets and catalogues to brand-catalogue entries. The reply is checked against the page text (verify in equipment.ts) before review.
+export const equipmentPrompt=(text:string)=>`You read text taken from a manufacturer's datasheet or catalogue for electrical equipment (motors, drives, breakers, panels).
+List each model or part number with its electrical data: one entry per model and per voltage or frequency variant.
+Reply with JSON only: {"rows":[{"model":"","configuration":"","ratedKw":"","protectionA":"","inA":"","un":"","efficiency":"","pf":"","page":1,"evidence":""}]}
+- Copy values exactly as written. Leave a field "" when the text does not state it. Never estimate or calculate.
+- configuration: the variant, written like "400 V, 3-phase, 50 Hz". un: the rated voltage, like "400 V".
+- ratedKw: rated power in kW. inA: rated current in A. protectionA: the protective device rating in A, if stated.
+- efficiency and pf as decimals (94.2 % is 0.942).
+- page: the page number the values are on. evidence: the shortest exact line of text that shows them.
+
+${text}`;
+export async function askEquipment(s:AiSettings,pages:readonly {page:number;text:string}[],signal?:AbortSignal):Promise<string> {
+ return chat(s,[{role:'user',content:equipmentPrompt(pages.map(p=>`--- page ${p.page} ---\n${p.text}`).join('\n').slice(0,AI_MAX_CHARS))}],signal);
+}
+
 // The load-list assistant: the model reads a plain-text brief of the sheet (every number in it comes from the engine)
 // and answers questions. It may propose fixes, which the engineer ticks before anything changes. Never a cable run (AH).
 const num=(v:unknown)=>typeof v==='number'?String(+v.toFixed(2)):String(v??'');

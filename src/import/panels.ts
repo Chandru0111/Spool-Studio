@@ -34,7 +34,7 @@ function panelOf(text:string):{name:string;fedFrom?:string}|null {
  const f=readFacts(text),boards=f.tags.filter(t=>isBoardTag(t)&&t!==f.fedFrom),name=boards.find(t=>/\d/.test(t))??boards[0];
  return name?{name,...f.fedFrom&&f.fedFrom!==name?{fedFrom:f.fedFrom}:{}}:null;
 }
-// Worksheets are often named after their panel in words ("Main LV Switchboard", "Hoist Panel"), not by tag.
+// Worksheets are often named after their panel in words ("Pump House Panel", "Workshop Panel"), not by tag.
 const PANEL_WORD=/\b(?:switch\s*boards?|panels?|boards?|mcc|db|msb|smsb|mdb|sdb|box|kiosk|cubicle|distribution)\b/i;
 const sheetPanelOf=(name:string)=>panelOf(name)??(PANEL_WORD.test(name.replace(/[_-]/g,' '))?{name:name.trim()}:null);
 // A title is a short row (at most three distinct values) a few rows above the header that names a panel.

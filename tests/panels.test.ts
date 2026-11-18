@@ -63,21 +63,21 @@ describe('workbooks with one load list per panel',()=>{
   const room=(name:string,rows:string[][])=>({name,formulaCells:0,rows:[['EQUIPMENT LIST — ROOM 1'],['How it works','Yellow = user input'],['EQUIPMENT LIST'],top,sub,...rows,
    ['','','','Load basis','C kW','C kVAr','I kW'],['','','','Total connected load','10.5','6','31'],['','','','Largest single load','10.5','6','31']]});
   const r=readPanels([
-   {name:'Equipment List Register',formulaCells:0,rows:[['Room','Tab name'],['Room 1','Main LV Switchboard']]},
-   room('Main LV Switchboard',loads),room('Hoist-Gantry Panel',[['1','','','','','','','','','','','','']]),
+   {name:'Equipment List Register',formulaCells:0,rows:[['Room','Tab name'],['Room 1','Pump House Panel']]},
+   room('Pump House Panel',loads),room('Workshop Panel',[['1','','','','','','','','','','','','']]),
    {name:'Searchbar',formulaCells:0,rows:[sub,...loads]},
    {name:'Brand (Acme)',formulaCells:0,rows:[['Brand','Model','Rated Input Power (kW)','Protection Device Rating (A)','Un'],['ACME','X1','12','32','400']]},
   ]);
   expect(r.candidates.map(c=>c.row)).toMatchObject([
-   {C:'Main LV Switchboard',D:'Fire pump',E:'3',F:'400',G:'12',H:'',I:'0.85',N:'32'},
-   {C:'Main LV Switchboard',D:'Winch',E:'3',F:'400',G:'37',H:'',I:'0.86',N:'100'}]);
+   {C:'Pump House Panel',D:'Fire pump',E:'3',F:'400',G:'12',H:'',I:'0.85',N:'32'},
+   {C:'Pump House Panel',D:'Winch',E:'3',F:'400',G:'37',H:'',I:'0.86',N:'100'}]);
   expect(r.candidates[0]!.inferred.E).toBe('Voltage 400 V: three-phase');
   // In (A) 20 A vs Ib = 12 kW / (√3 × 400 V × 0.85) = 20.4 A: fine. Winch: 37 kW → 62.1 A vs In 70 A: within 20%.
   expect(r.notes.join(' ')).not.toContain('differs from the list');
   expect(r.columns).toEqual(expect.arrayContaining(['Rated Input Power (kW) → G · Design Load (kW)','Protection Device Rating (A) → N · Protection Rating In (A)','Un → F · Operating Voltage (V)',
    'In (A) → checked against the calculated design current Ib','Load Factor → load balance only; not used to size one cable','Description → D · To','Phases: not in the file; worked out from the voltage (italic).']));
   expect(r.columns.join(' ')).toContain('Cable run length: not in the file');
-  expect(r.boards).toEqual(['Main LV Switchboard','Hoist-Gantry Panel']);
+  expect(r.boards).toEqual(['Pump House Panel','Workshop Panel']);
   const notes=r.notes.join(' ');
   expect(notes).toContain('2 rows on Searchbar repeat loads');expect(notes).toContain('2 total rows were skipped');expect(notes).toContain('with no load name');
   expect(notes).not.toContain('no panel');

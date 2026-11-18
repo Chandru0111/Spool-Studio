@@ -5,7 +5,7 @@
     "authority": "User explicitly chose: Keep the current workbook-based app.",
     "active": [
       "Single cable sheet",
-      "Load-list import, editing and suggestions, with linked Cable sizing data and Load list grids and independent screen-only column visibility",
+      "Cable sizing tab (formerly Load list): import, editing and suggestions on the Cable sizing data grid with screen-only column visibility",
       "Original-template XLSX export",
       "Supplier/basic drum options with text/OCR import; editable Keystone installation and fixed-bend references, distinct from the entered drum barrel limit (2026-11-17)",
       "Translucent adjustable drum model (auto-rotating)",
@@ -18,7 +18,8 @@
       "Auto-rotating drum turntable without orbit controls (2026-10-30)",
       "Load list from schematics: PDF text layer/OCR, ASCII DXF text and block attributes, PNG/JPG/WebP OCR, with a review step (2026-10-30)",
       "Optional Read with AI in the schematic review, using a model on the user's own computer only (Ollama or LM Studio); hosted AI rejected by the user (2026-11-16)",
-      "Workbooks with one load list per MCC/DB panel (sheet per panel or stacked titled blocks) and an Ask AI assistant on the load list that explains it and proposes changes the user ticks (2026-11-16)"
+      "Workbooks with one load list per MCC/DB panel (sheet per panel or stacked titled blocks) and an Ask AI assistant on the load list that explains it and proposes changes the user ticks (2026-11-16)",
+      "Load list tab (2026-11-18, user-requested): equipment list per panel in the user's layout, workbook load balance (C/I/S operating factors, design margin, plant load), brand catalogue filled by Brand + Model + Configuration, catalogue import from workbooks and reviewed PDF/image datasheets, search across panels, scenario comparison with charts, Excel export, and one-way Send to cable sizing"
     ],
     "archived": [
       "Cable catalogue review screen",
@@ -67,7 +68,8 @@
     "Untrusted files are size-checked before parsing: CSV/TSV ≤10,000 rows and ≤200 columns, images by header dimensions, PDF page/text/image limits, DXF line/text limits. Avoid spreading large arrays into function calls (Math.max(...), push(...)).",
     "The app ships with no example project: the reference workbook is the source of the formulas and tables only. A fresh workspace is \"Untitled project\" with empty sheets and no cable runs; drum and cable specifications keep their editable defaults.",
     "Drawing images are processed on the device only; image size is checked from the file header before decoding, OCR words are capped at 8,000 per pass and tracing is bounded (strokes, busbars, feeders).",
-    "Workbook columns A-AO keep their letters. Columns added to the workbook go after AO, with helpers after them; the export rewrites the filter range for any last column."
+    "Workbook columns A-AO keep their letters. Columns added to the workbook go after AO, with helpers after them; the export rewrites the filter range for any last column.",
+    "Load list to Cable sizing is one way: sending updates matching rows and appends new ones but never deletes, and editing Cable sizing never changes the Load list. Two items with the same From/To stay two rows. A value typed on a load-list row always wins over the catalogue, and a datasheet value reaches the catalogue only after the user ticks it."
   ],
   "workflows": [
     {
@@ -178,11 +180,30 @@
         "src/ui/state.ts",
         "src/ui/App.tsx"
       ]
+    },
+    {
+      "id": "equipment-list",
+      "steps": [
+        "Add a panel or import an equipment-list workbook (panel sheets become tabs, Brand sheets the catalogue)",
+        "Build the catalogue: import a catalogue workbook or read a PDF/image datasheet and tick the verified rows",
+        "Enter KKS, description, duty and consumed load; pick Brand, Model and Configuration to fill the rest. KSS headings are also accepted on import.",
+        "Adjust each panel's operating factors and design margin; read the panel and plant load",
+        "Search across panels and compare a candidate model or load",
+        "Export panel sheets with the template's six-row heading, four added equipment columns, operating-factor summary, live formulas and landscape print layout, or Send to cable sizing (From = panel, To = description, G = rated input power). The template's intermittent reactive operating-factor formula uses the largest load, so export totals may differ from the website."
+      ],
+      "modules": [
+        "src/ui/Loads.tsx",
+        "src/ui/Catalogue.tsx",
+        "src/ui/Scenario.tsx",
+        "src/engine/loads.ts",
+        "src/import/equipment.ts",
+        "src/export/equipment.ts"
+      ]
     }
   ],
   "modules": {
     "src/main.tsx": "Mounts Preact and starts local project restoration/autosave.",
-    "src/ui/App.tsx": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
+    "src/ui/App.tsx": "Four active tabs (Single cable, Load list, Cable sizing, Drums), undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
     "src/ui/state.ts": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced autosave and a BroadcastChannel warning when another tab saves the same project. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
     "src/ui/SingleCable.tsx": "One unchanged workbook row, result strip, missing-input shortcuts, inline Calculation panel (pick a size from the ladder), print/PDF and Excel export.",
     "src/ui/LoadList.tsx": "Import mapping dialog; header with Import menu (load list or schematic), Add row, a More menu (Print / PDF, Ask AI) and Export to Excel as the only primary action; one-line summary (status split, connected load on final circuits only, worst total VD opening its calculation, cable km toggling quantities with drum links, pending suggestions with Accept all); one filter bar (panel dropdown, status chips, search, issues list with jump-to-cell, Defaults popover for suggestion settings, View menu with screen-only column presets plus the colour key); bulk edit of selected rows, grid, calculation drawer and 'How the sheet works' notes. Appending enforces the 2,000-row project limit. Drop routing by file type, reading progress bar with Cancel, and the schematic review dialog.",
@@ -219,7 +240,14 @@
     "src/import/schematic-read.ts": "Browser reader for schematics: pdf.js text with page rotation and text direction, OCR (sparse-text mode) for pages without a text layer or for images, UTF-8/Windows-1252 DXF decoding, cancel support, 25 MB/page/text-item limits, image header dimension check before decoding, friendly pdf.js and DWG messages. Images and scanned PDF pages go through drawing-ocr (scale up to 2x for small screenshots, 24 MP working budget); vector PDF pages are rendered to trace busbars and feeders under the text layer. Returns the text read for the review.",
     "src/ui/Schematic.tsx": "Review dialog for circuits read from a schematic: tick/untick rows, page and source text per row, worked-out values in italics with their reason, notes (spares skipped, unsupported voltages, DC, unticked fed-from feeders), Create load list / Add to current list. Opens even when no circuits are recognised, explaining why and showing the text that was read; a collapsible \"Text read from the drawing\" panel is always available.",
     "src/import/raster.ts": "Pure image helpers for drawings (plain RGBA arrays, linear in pixels): luminance, Otsu threshold, ink mask, line mask that ignores strongly coloured mark-ups, letter stem height measured from vertical run lengths, straight-stroke detection with thickness, box detection (breaker/symbol outlines found before lines are erased) and outline erasing, OCR clean image with long lines erased, quarter-turn rotation and mapping of rotated word boxes, and feeder tracing: busbars are long horizontal strokes with feeders (two if heavier than other long lines, else three; twice-bent cable routes rejected), feeders are followed through bends and across symbol gaps (breakers, fuses, coils) using an endpoint grid. Limits: 8,000 strokes, 60 busbars, 1,500 feeders.",
-    "src/import/drawing-ocr.ts": "Image pipeline shared by browser and tests: clean image (threshold, long lines and symbol boxes erased), OCR in three orientations (upright, upward, downward text) with tiling for large sheets, noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry."
+    "src/import/drawing-ocr.ts": "Image pipeline shared by browser and tests: clean image (threshold, long lines and symbol boxes erased), OCR in three orientations (upright, upward, downward text) with tiling for large sheets, noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry.",
+    "src/engine/loads.ts": "Equipment-list engine: row and catalogue shapes, catalogue index and fill (Brand + Model + Configuration), per-row kW/kVAr/load factor, panel and plant totals with operating factors and design margin, and the scenario comparison.",
+    "src/import/equipment.ts": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
+    "src/export/equipment.ts": "Load list Excel export: a cover page, then one sheet per panel laid out cell for cell as the engineer's designed panel sheet (equipment-layout.ts) with live formulas; catalogue-only export.",
+    "src/ui/Loads.tsx": "Load list tab: panel tabs, the equipment grid (ticks, dropdowns, catalogue placeholders, Excel paste), panel totals with editable factors and margin, import, export and Send to cable sizing.",
+    "src/ui/Catalogue.tsx": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, tick to add).",
+    "src/ui/Scenario.tsx": "Search across panels by KKS/description, scenario comparison table and inline-SVG grouped bar charts, plant load by panel.",
+    "src/export/equipment-layout.ts": "Panel sheet layout: header rows 1-6, at least 32 item rows, the running plant load, operating factors and load basis summary, page setup; formulas with cached results."
   },
   "calculationReference": {
     "electrical": "I1 = kW × diversity × 1000 / (V × PF × (sqrt(3) for 3-phase, else 1)); Ib = I1 × sqrt(1 + THD²); Iz = It × parallel × Ca × Cg × Cs × Ci × Ct; circuit VD% = Ib × run_m × mV/A/m / (10 × parallel × V).",
@@ -281,7 +309,8 @@
     "Image reading (screenshots, scans, PDFs without a text layer) uses on-device OCR in three orientations plus line tracing of busbars and feeders. It handles orthogonal single-line diagrams; diagonal lines, dense overlapping labels, red-line mark-ups over text and very small text (under about 10 px) read poorly. Numbers from OCR must be checked in the review.",
     "DWG is not readable; export ASCII DXF or PDF. Binary DXF and block-definition text other than attributes are not read. AWG/kcmil sizes, DC systems and voltages outside the workbook list are kept but cannot be sized by the workbook.",
     "The workbook ratings cover LV cables (230–690 V). Medium/high-voltage drawings (e.g. 13.8 kV, 138 kV) are read and listed with their drawing voltage, but rows show as invalid on the sheet until MV rating tables are supplied.",
-    "Earth fault loop, RCD, CPC and short-circuit columns AP-BO cover TN-S and TT only (SS 638:2018, IEC 60364). Ze and fault level default to blank (not assumed); a TT row needs Ze typed or a TT feeding row. Not modelled: TN-C, TN-C-S and IT systems, cable reactance (Zs reads low above about 35 mm2), the IEC 60909 voltage factor c and minimum fault currents, RCD discrimination, the TN-S times allowed for a bonded TT installation on an overcurrent device, electrode stability above 200 ohms, Annex A.3 exemptions, fuse Zs tables (type Ia). A separate copper CPC is taken as PVC-insulated and not bunched; armour and tape need catalogue area and resistance."
+    "Earth fault loop, RCD, CPC and short-circuit columns AP-BO cover TN-S and TT only (SS 638:2018, IEC 60364). Ze and fault level default to blank (not assumed); a TT row needs Ze typed or a TT feeding row. Not modelled: TN-C, TN-C-S and IT systems, cable reactance (Zs reads low above about 35 mm2), the IEC 60909 voltage factor c and minimum fault currents, RCD discrimination, the TN-S times allowed for a bonded TT installation on an overcurrent device, electrode stability above 200 ohms, Annex A.3 exemptions, fuse Zs tables (type Ia). A separate copper CPC is taken as PVC-insulated and not bunched; armour and tape need catalogue area and resistance.",
+    "Load list: the export's intermittent reactive operating-factor formula intentionally follows the supplied template, which can differ from the app's total-load calculation. The panel sheet matches the designed \"Panel 1\" cell for cell (except the KKS heading); it has not been opened in Excel here, so the print preview is unchecked. Text placeholders in consumed load, efficiency or power factor are left out of the export. Scenario inputs are not saved; the In vs Ib check is not run on send; one header block per sheet is read on import; the equipment grid has no arrow-key navigation."
   ],
   "changeGuide": [
     {

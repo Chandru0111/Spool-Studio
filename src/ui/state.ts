@@ -1,6 +1,7 @@
 import { signal,computed,effect } from '@preact/signals';
 import { ZodError } from 'zod';
-import { defaultDrum,Project } from '../store/schema';
+import { defaultDrum,Project,type LoadPanel,type Loads } from '../store/schema';
+import { balance,emptyLoad,fillRow,indexCatalogue,panelTotals,plantTotals,type LoadKey,type LoadRow } from '../engine/loads';
 import { selectedDrumOption,loadListGroups } from '../engine/procurement';
 import { planDrums,parseRuns } from '../engine/drums';
 import { calculateRow,clip,emptyRow,type InputCol,type SheetRow } from '../engine/sheet';
@@ -8,9 +9,9 @@ import { suggestSheet,acceptSuggestions,defaultSuggestions,type SuggestDefaults 
 import { autosaveProject,forgetDeviceCopy,restoreProject } from '../store/project';
 import { exportSheet,panelSheets } from '../export/template';
 // A neutral starting workspace; reference workbooks are examples, not the user's project.
-export const fresh=():Project=>Project.parse({schemaVersion:2,sheetLayout:8,name:'Untitled project',single:emptyRow(),list:{rows:[],source:'',defaults:{...defaultSuggestions}},drum:{...defaultDrum},cable:{odMm:29.2,kgKm:1850,minBendRadiusXOd:6},runs:'',demoGeometry:true});
+export const fresh=():Project=>Project.parse({schemaVersion:2,sheetLayout:8,name:'Untitled project',single:emptyRow(),list:{rows:[],source:'',defaults:{...defaultSuggestions}},drum:{...defaultDrum},cable:{odMm:29.2,kgKm:1850,minBendRadiusXOd:6},runs:'',demoGeometry:true,loads:{panels:[],catalogue:[],source:''}});
 export const project=signal<Project>(fresh());
-export type Tab='single'|'list'|'drums';
+export type Tab='single'|'loads'|'list'|'drums';
 export const tab=signal<Tab>('single');
 export const toast=signal('');export const saveStatus=signal('Local workspace');export const exporting=signal(false);
 // The single-cable sheet behaves exactly like the workbook; the load list adds suggestions for blank cells.
@@ -31,7 +32,7 @@ export type ListFilter='all'|'issues'|'fail'|'incomplete'|'suggested'|'pass';
 // listPanel: the panel tab shown (a From value, '' = rows with no From); null shows every panel.
 export const listPanel=signal<string|null>(null);export const listFilter=signal<ListFilter>('all');export const listSearch=signal('');export const selection=signal<ReadonlySet<number>>(new Set());export const inspecting=signal<number|null>(null);
 // Clears every sheet and drum setting in one undoable step (Ctrl+Z brings the previous project back until reload).
-export function newProject():void {listPanel.value=null;listFilter.value='all';listSearch.value='';selection.value=new Set();inspecting.value=null;updateProject(fresh());notify('New project started. Undo with Ctrl+Z if you need the previous one back.');}
+export function newProject():void {loadPanel.value=0;loadView.value='panels';scenarioPick.value=null;listPanel.value=null;listFilter.value='all';listSearch.value='';selection.value=new Set();inspecting.value=null;updateProject(fresh());notify('New project started. Undo with Ctrl+Z if you need the previous one back.');}
 // Light is the default look; the choice is a per-viewer convenience kept in this browser only.
 const storedTheme=():'light'|'dark'=>{try{return localStorage.getItem('spool-theme')==='dark'?'dark':'light';}catch{return 'light';}};
 export const theme=signal(storedTheme());
@@ -39,6 +40,15 @@ effect(()=>{const t=theme.value;if(typeof document!=='undefined')document.docume
 export const setSingle=(col:InputCol,value:string)=>updateProject({single:{...project.value.single,[col]:clip(value)}},`single:${col}`);
 export const setList=(p:Partial<Project['list']>,key='')=>updateProject({list:{...project.value.list,...p}},key);
 export const setListRows=(rows:SheetRow[],key='')=>{if(rows.length>2000){notify('A load list supports at most 2,000 rows.');return;}setList({rows},key);};
+// Equipment load list (Load list tab). Each panel's rows are shown with catalogue values filled in; totals follow the workbook.
+export const setLoads=(p:Partial<Loads>,key='')=>updateProject({loads:{...project.value.loads,...p}},key);
+export const catalogueIndex=computed(()=>indexCatalogue(project.value.loads.catalogue));
+export const loadSheets=computed(()=>{const idx=catalogueIndex.value;return project.value.loads.panels.map(p=>{const filled=p.rows.map(r=>fillRow(r,idx)),bal=filled.map(f=>balance(f.row));return {filled,bal,totals:panelTotals(bal,p.factors,p.margin)};});});
+export const plantLoad=computed(()=>plantTotals(loadSheets.value.map(s=>s.totals)));
+export const setPanel=(i:number,patch:Partial<LoadPanel>,key='')=>{const panels=[...project.value.loads.panels],p=panels[i];if(!p)return;panels[i]={...p,...patch};setLoads({panels},key);};
+export const setLoadRows=(i:number,rows:LoadRow[],key='')=>{if(rows.length>500){notify('A panel holds at most 500 items. Add another panel for the rest.');return;}setPanel(i,{rows},key);};
+export const setLoadCell=(i:number,r:number,k:LoadKey,value:string)=>{const p=project.value.loads.panels[i];if(!p)return;const rows=[...p.rows];rows[r]={...(rows[r]??emptyLoad()),[k]:clip(value)};setLoadRows(i,rows,`load:${i}:${r}:${k}`);};
+export const loadPanel=signal(0);export const loadView=signal<'panels'|'catalogue'|'scenario'>('panels');export const scenarioPick=signal<{panel:number;row:number}|null>(null);
 export const setListCell=(i:number,col:InputCol,value:string)=>{const rows=[...project.value.list.rows];rows[i]={...(rows[i]??emptyRow()),[col]:clip(value)};setListRows(rows,`list:${i}:${col}`);};
 export const setDefaults=(d:Partial<SuggestDefaults>)=>setList({defaults:{...project.value.list.defaults,...d}},`defaults:${Object.keys(d).join()}`);
 export function acceptAll():void {setListRows(acceptSuggestions(project.value.list.rows,listSheet.value));notify('Suggestions accepted. They are now ordinary values you can edit.');}

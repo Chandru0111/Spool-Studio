@@ -1,13 +1,14 @@
 import {useState,useRef,useEffect} from 'preact/hooks';
-import {Cable,ListChecks,Box,X,Check,PencilLine,Info,Save,FolderOpen,Undo2,Redo2,Keyboard,Sun,Moon,FilePlus} from 'lucide-preact';
+import {Cable,ListChecks,ClipboardList,Box,X,Check,PencilLine,Info,Save,FolderOpen,Undo2,Redo2,Keyboard,Sun,Moon,FilePlus} from 'lucide-preact';
 import {project,tab,toast,saveStatus,updateProject,notify,history,undo,redo,theme,saveProblem,newProject,type Tab} from './state';
 import {Report} from './Report';
 import {saveProject,openProject} from '../store/project';
 import {SingleCable} from './SingleCable';
 import {LoadList} from './LoadList';
+import {Loads} from './Loads';
 import {Drums} from './Drums';
 
-const tabs:{id:Tab;label:string;icon:typeof Cable}[]=[{id:'single',label:'Single cable',icon:Cable},{id:'list',label:'Load list',icon:ListChecks},{id:'drums',label:'Drums',icon:Box}];
+const tabs:{id:Tab;label:string;icon:typeof Cable}[]=[{id:'single',label:'Single cable',icon:Cable},{id:'loads',label:'Load list',icon:ClipboardList},{id:'list',label:'Cable sizing',icon:ListChecks},{id:'drums',label:'Drums',icon:Box}];
 const SHORTCUTS:[string,string][]=[['Enter / Shift+Enter','Next / previous row'],['Tab / Shift+Tab','Next / previous cell'],['← → ↑ ↓','Move between cells (at the edge of the text)'],['Ctrl/⌘ + D','Fill down from the cell above'],['Delete','Clear a dropdown cell'],['Ctrl/⌘ + V','Paste a block copied from Excel'],['Ctrl/⌘ + Z','Undo'],['Ctrl/⌘ + Shift + Z, Ctrl + Y','Redo'],['Click Item / Shift-click','Select rows / a range for bulk edit'],['Esc','Close the calculation panel']];
 export function App(){const [help,setHelp]=useState(false),[rename,setRename]=useState(false),[clearing,setClearing]=useState(false),[pending,setPending]=useState<Awaited<ReturnType<typeof openProject>>|null>(null),backup=useRef<HTMLInputElement>(null);const active=tab.value;
  // App-wide undo: the sheet's inputs are controlled, so the browser's own text undo would fight the project history.
@@ -20,7 +21,7 @@ export function App(){const [help,setHelp]=useState(false),[rename,setRename]=us
   </header>
   <input ref={backup} class="visually-hidden" type="file" accept=".json,.spool.json" aria-label="Project backup file" onChange={async e=>{const input=e.currentTarget,file=input.files?.[0];if(!file)return;try{setPending(await openProject(file));}catch(error){notify(error instanceof Error?error.message:'Could not open backup.');}finally{input.value='';}}}/>
   {pending&&<div class="modal-backdrop"><section class="modal small-modal" role="dialog" aria-modal="true" aria-label="Open project backup"><h2>Open {pending.name}?</h2><p>This replaces the current workspace. Save a backup of current inputs first if you need them.</p><div class="modal-actions"><button class="button secondary small" onClick={()=>setPending(null)}>Cancel</button><button class="button primary small" onClick={()=>{updateProject(pending);setPending(null);notify('Project restored. Results recalculated.');}}>Open backup</button></div></section></div>}
-  <main class="page">{active==='single'?<SingleCable/>:active==='list'?<LoadList/>:<Drums/>}</main>
+  <main class="page">{active==='single'?<SingleCable/>:active==='loads'?<Loads/>:active==='list'?<LoadList/>:<Drums/>}</main>
   {toast.value&&<div class="toast" role="status"><Info size={17}/><span>{toast.value}</span><button class="icon-button" aria-label="Dismiss notification" onClick={()=>toast.value=''}><X size={15}/></button></div>}
   {rename&&<div class="modal-backdrop"><section class="modal small-modal" role="dialog" aria-modal="true" aria-label="Project"><h2>Project</h2><p class="muted">Used for exported file names.</p><label class="field"><span>Name</span><input value={project.value.name} maxLength={100} onInput={e=>{const name=e.currentTarget.value;if(name.trim())updateProject({name},'name');}}/></label>
    <div class="new-project">{clearing?<><p><b>Clear this project and start over?</b> The single cable, load list and drum settings saved in this browser are replaced. Save a backup first if you need them.</p><div class="inline-actions"><button class="button secondary small" onClick={()=>setClearing(false)}>Keep it</button><button class="button primary small" onClick={()=>{newProject();setClearing(false);setRename(false);}}><FilePlus size={15}/>Start new project</button></div></>:<button class="text-button" onClick={()=>setClearing(true)}><FilePlus size={14}/>Start a new project</button>}</div>

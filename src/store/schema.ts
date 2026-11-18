@@ -1,4 +1,5 @@
 import {INPUT_COLS,MAX_CELL,type SheetRow} from '../engine/sheet';
+import {CATALOGUE_KEYS,DEFAULT_FACTORS,DEFAULT_MARGIN,LOAD_KEYS,type CatalogueKey,type LoadKey} from '../engine/loads';
 import { z } from 'zod';
 
 export const Rating = z.object({
@@ -40,7 +41,16 @@ const toStep08=(r:unknown)=>{if(!r||typeof r!=='object'||Array.isArray(r))return
  return o;};
 const migrate=(p:unknown)=>{if(!p||typeof p!=='object'||Array.isArray(p)||(p as {sheetLayout?:unknown}).sheetLayout===8)return p;const o={...(p as Record<string,unknown>)},list=o.list as {rows?:unknown}|undefined;
  o.single=toStep08(o.single);if(list&&typeof list==='object'&&Array.isArray(list.rows))o.list={...list,rows:list.rows.map(toStep08)};o.sheetLayout=8;return o;};
+const cells=<K extends string>(keys:readonly K[])=>z.object(Object.fromEntries(keys.map(k=>[k,z.string().max(MAX_CELL).default('')])) as Record<K,z.ZodDefault<z.ZodString>>);
+export const LoadRowData=cells<LoadKey>(LOAD_KEYS);
+export const CatalogueRowData=cells<CatalogueKey>(CATALOGUE_KEYS);
+const factor=z.string().max(20);
+export const LoadPanel=z.object({name:z.string().max(60).default('Panel'),rows:z.array(LoadRowData).max(500).default([]),factors:z.object({C:factor,I:factor,S:factor}).default({...DEFAULT_FACTORS}),margin:factor.default(DEFAULT_MARGIN)});
+export type LoadPanel=z.infer<typeof LoadPanel>;
+// The equipment load list and the brand catalogue it draws on. Projects saved before it existed start with an empty one.
+export const Loads=z.object({panels:z.array(LoadPanel).max(50).default([]),catalogue:z.array(CatalogueRowData).max(5000).default([]),source:z.string().max(300).default('')}).default({});
+export type Loads=z.infer<typeof Loads>;
 export const SuggestDefaults=z.object({cableType:z.string().max(300),cores3:z.string().max(300),cores1:z.string().max(300),method:z.string().max(300),vdPct:z.string().max(300)});
 export const BendGuidance=z.object({type:z.enum(['','single','multi','armoured','fire','fire-armoured']).default(''),installation:z.string().max(30).default(''),fixed:z.string().max(30).default(''),source:z.string().max(500).default('')}).default({type:'',installation:'',fixed:'',source:''});
-export const Project = z.preprocess(migrate,z.object({schemaVersion:z.literal(2),sheetLayout:z.literal(8),name:z.string().min(1).max(100),single:SheetRowData,list:z.object({rows:z.array(SheetRowData).max(2000),source:z.string().max(300),defaults:SuggestDefaults}),drum:Drum,cable:CableGeometry,bendGuidance:BendGuidance,runs:z.string().max(20000),demoGeometry:z.boolean(),drumOptions:z.array(DrumOption).max(100).default([]),selectedDrumId:z.string().default('basic-1250'),runsFrom:z.string().default(''),geometryFor:z.string().default(''),geometrySource:z.string().max(500).default('')}));
+export const Project = z.preprocess(migrate,z.object({schemaVersion:z.literal(2),sheetLayout:z.literal(8),name:z.string().min(1).max(100),single:SheetRowData,list:z.object({rows:z.array(SheetRowData).max(2000),source:z.string().max(300),defaults:SuggestDefaults}),drum:Drum,cable:CableGeometry,bendGuidance:BendGuidance,runs:z.string().max(20000),demoGeometry:z.boolean(),drumOptions:z.array(DrumOption).max(100).default([]),selectedDrumId:z.string().default('basic-1250'),runsFrom:z.string().default(''),geometryFor:z.string().default(''),geometrySource:z.string().max(500).default(''),loads:Loads}));
 export type Project = z.infer<typeof Project>;
