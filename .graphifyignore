@@ -1,0 +1,11 @@
+# Graph = code (src, scripts, tests) + README, AGENTS.md, docs/project-knowledge.json.
+# Licensed standards text must never be read into the graph.
+public/
+docs/verification.json
+samples/
+src/data/
+tests/fixtures/
+spool-studio.dkg
+package-lock.json
+graphify-out/
+.claude/

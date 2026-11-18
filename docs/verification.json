@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-11-18T02:18:50.772Z",
+  "sourceFingerprint": "d14c2bce0641d2762e5d057480b60157dc68f7f3b678a95e516fe94361a2eb4d",
+  "status": "passed",
+  "steps": [
+    {
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "summary": "Passed"
+    },
+    {
+      "command": "npm run test",
+      "exitCode": 0,
+      "summary": "Test Files  10 passed (10); Tests  100 passed (100)"
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0,
+      "summary": "Passed"
+    },
+    {
+      "command": "npm run verify:vendor",
+      "exitCode": 0,
+      "summary": "Verified 204 local PDF/OCR asset checksums."
+    }
+  ]
+}

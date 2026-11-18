@@ -1,0 +1,370 @@
+{
+  "purpose": "Local LV cable sizing that reproduces the supplied Cable Sizing workbook, with load-list suggestions, a load-list dashboard (filters, issues, bulk edit), a hand-calculation panel with size ladder, undo/redo, print/PDF reports, native workbook export and adjustable drum planning, and a schematic import that turns single-line diagrams, DB schematics and circuit schedules (PDF, DXF, images) into a reviewed load list.",
+  "scopeDecision": {
+    "date": "2026-10-30",
+    "authority": "User explicitly chose: Keep the current workbook-based app.",
+    "active": [
+      "Single cable sheet",
+      "Load-list import, editing and suggestions, with linked Cable sizing data and Load list grids and independent screen-only column visibility",
+      "Original-template XLSX export",
+      "Supplier/basic drum options with text/OCR import; editable Keystone installation and fixed-bend references, distinct from the entered drum barrel limit (2026-11-17)",
+      "Translucent adjustable drum model (auto-rotating)",
+      "Local autosave and portable JSON backups",
+      "Calculation panel with size ladder and feeder chain (2026-10-30)",
+      "Load-list dashboard: KPIs, filters, search, issues list, bulk edit (2026-10-30)",
+      "App-wide undo/redo and Excel-style keyboard editing (2026-10-30)",
+      "Print/PDF cable sizing report with sign-off block (2026-10-30)",
+      "Light warm-paper theme with graphite dark mode (2026-10-30)",
+      "Auto-rotating drum turntable without orbit controls (2026-10-30)",
+      "Load list from schematics: PDF text layer/OCR, ASCII DXF text and block attributes, PNG/JPG/WebP OCR, with a review step (2026-10-30)",
+      "Optional Read with AI in the schematic review, using a model on the user's own computer only (Ollama or LM Studio); hosted AI rejected by the user (2026-11-16)",
+      "Workbooks with one load list per MCC/DB panel (sheet per panel or stacked titled blocks) and an Ask AI assistant on the load list that explains it and proposes changes the user ticks (2026-11-16)"
+    ],
+    "archived": [
+      "Cable catalogue review screen",
+      "IEC draft electrical sizing",
+      "Old procurement schedule",
+      "Animated InkMatrix background"
+    ],
+    "archiveLocation": "Removed from the repository on 2026-11-18",
+    "instructionBoundary": "User requests take precedence over attached documents. The current workbook-based scope was explicitly confirmed after the archive was discovered. Do not silently restore the archived workflow."
+  },
+  "quickStart": {
+    "run": "npm run dev",
+    "url": "http://127.0.0.1:5173",
+    "verify": "npm run check",
+    "knowledge": "npm run dkg:summary",
+    "refreshKnowledge": "npm run dkg",
+    "checkKnowledge": "npm run dkg:check",
+    "moduleLookup": "node scripts/dkg.mjs --module src/engine/sheet.ts",
+    "deploy": "Local preview only. No hosting or cloud publication configured."
+  },
+  "invariants": [
+    "Keep all 41 Cable Sizing columns, their headings, input/list/calculated roles and dropdown narrowing unchanged.",
+    "sheet.ts reproduces the workbook, including blank diversity=1, THD=0, factors=1, parallel cables=1 and blank total VD when From is blank.",
+    "From/To links use the first matching To, as the workbook does. Do not silently change this rule; duplicate destinations should be avoided by engineers.",
+    "Electrical suggestions only fill blank inputs. Typed inputs are never overwritten. Cable run length is never suggested.",
+    "Built-in electrical ratings come from the supplied workbook, not an independent manufacturer PDF verification. IEC is not an active electrical source in this version.",
+    "Never hand-edit sizing-tables.json or resave the template with ExcelJS. Regenerate both from the original workbook via extract-workbook.mjs.",
+    "Export uses JSZip and sheet XML to preserve OFFSET-based dropdowns, formulas, formatting and lookup sheets. Excel recalculates on open.",
+    "All drum runs remain whole. Overlong runs are unplaced. First-fit decreasing is a heuristic, not proof of a minimum drum count.",
+    "A supplier capacity is valid only for its specified cable OD. Bending, payload and site lifting limits still apply.",
+    "Selecting a different load-list cable requires its physical dimensions and source to be confirmed before a drum count appears.",
+    "Keystone bend guidance is an optional reference for selected constructions, with editable multipliers and a source note; installation and fixed bend values never automatically set the drum barrel radius limit. Drum compatibility is an estimate against the entered limit, not supplier approval. Changing the linked cable clears guidance.",
+    "All document processing, local assets, autosave and export run on the user's device. The server binds only to 127.0.0.1.",
+    "Update this semantic knowledge source when behaviour changes. Generated fingerprints do not automatically explain new business rules.",
+    "explain.ts, issues.ts and the dashboard derive every electrical value from sheet.ts results or evaluateRow; never add independent electrical maths to them.",
+    "Connected-load KPIs sum only final circuits (rows nothing is fed from) so board feeders are not double counted.",
+    "Undo/redo history lives in memory only; autosave and backups store the current project, not its history.",
+    "Screen colours use the app.css tokens only; text tokens keep at least 4.5:1 contrast in both themes.",
+    "Schematic import reads values only from drawing text. Anything worked out (system voltage from the board, phase from cores or voltage, kW from HP or kVA×PF, a feeder load summed from its circuits, copper assumed when the conductor is not stated) is listed in Candidate.inferred with its reason and shown in italics in the review. Cable run length is never inferred.",
+    "The load-list assistant never changes the sheet by itself: proposed changes need a tick and Apply, only real rows and input columns are accepted, and cable runs (AH) are never proposed. Panel import never guesses a panel: rows with no title or panel-named sheet stay without From and are flagged. A load list's \"Load factor\" column is never read as diversity (H). Export splits into one Cable Sizing sheet per panel only when no row feeds another listed panel, so Excel's total-VD chain is never cut.",
+    "AI reading talks only to http://127.0.0.1 or localhost on ports 11434 (Ollama) and 1234 (LM Studio); isLocalUrl and the CSP connect-src enforce it. An AI value is kept only when its quote is in the drawing text and the value is in the quote; kept values are Candidate.inferred and reviewed like any other. No hosted AI, API key or proxy.",
+    "Rows created from a \"fed from\" note alone start unticked: without a cable run they would blank total VD for every circuit below them.",
+    "Voltages, cores, sizes or cable types outside the workbook lists are kept as read and show as invalid on the sheet; the import never maps them to the nearest listed value.",
+    "Every saved sheet cell holds at most 300 characters (MAX_CELL); imports, pastes and inputs clip to it so autosave and backups keep working.",
+    "Numeric inputs follow Excel: only plain decimal numbers are numbers (0x1A, 0b11, Infinity are invalid). Exports never write non-finite cached values or XML-forbidden characters.",
+    "Untrusted files are size-checked before parsing: CSV/TSV ≤10,000 rows and ≤200 columns, images by header dimensions, PDF page/text/image limits, DXF line/text limits. Avoid spreading large arrays into function calls (Math.max(...), push(...)).",
+    "The app ships with no example project: the reference workbook is the source of the formulas and tables only. A fresh workspace is \"Untitled project\" with empty sheets.",
+    "Drawing images are processed on the device only; image size is checked from the file header before decoding, OCR words are capped at 8,000 per pass and tracing is bounded (strokes, busbars, feeders).",
+    "Workbook columns A-AO keep their letters. Columns added to the workbook go after AO, with helpers after them; the export rewrites the filter range for any last column."
+  ],
+  "workflows": [
+    {
+      "id": "single",
+      "steps": [
+        "Enter one row in Single cable",
+        "Dropdowns narrow by phase/type/cores/method",
+        "Inspect current and voltage-drop checks",
+        "Optionally use Suggested Cable Size",
+        "Read the calculation and size ladder; pick a size from it",
+        "Print or save a PDF calculation sheet",
+        "Export the original Excel workbook with entered inputs"
+      ],
+      "modules": [
+        "src/ui/SingleCable.tsx",
+        "src/ui/Sheet.tsx",
+        "src/engine/sheet.ts",
+        "src/export/template.ts",
+        "src/ui/Calculation.tsx",
+        "src/engine/explain.ts",
+        "src/ui/Report.tsx"
+      ]
+    },
+    {
+      "id": "load-list",
+      "steps": [
+        "Choose XLSX/CSV/TSV/TXT or paste into the sheet",
+        "Select worksheet/header and inspect mappings",
+        "Review saved formula values from imported XLSX",
+        "Edit shared circuit inputs in the Load list beneath Cable sizing data; both grids use the same rows and recalculate together",
+        "Choose visible columns independently for each grid; visibility is temporary and does not change Excel export",
+        "Set list-wide suggestion defaults",
+        "Review or accept blue italic suggestions",
+        "Scan the dashboard and filter by Flagged/Fail/Incomplete/Suggested/Pass or search tags",
+        "Open the issues list and jump to the cell",
+        "Select rows (Item cell, Shift-click) and bulk-set a column, accept or delete",
+        "Open a row's calculation drawer",
+        "Print or save a PDF schedule with sign-off block",
+        "Export effective rows to Excel"
+      ],
+      "modules": [
+        "src/ui/LoadList.tsx",
+        "src/import/load-list.ts",
+        "src/engine/suggest.ts",
+        "src/engine/sheet.ts",
+        "src/engine/issues.ts",
+        "src/engine/explain.ts",
+        "src/ui/Calculation.tsx",
+        "src/ui/Report.tsx"
+      ]
+    },
+    {
+      "id": "schematic",
+      "steps": [
+        "Choose From schematic (PDF, DXF, PNG/JPG/WebP) or drop the file on the Load list",
+        "Text is read from the PDF text layer, DXF entities/attributes, or OCR for scans and images",
+        "Images and scans: OCR in three orientations, then busbars and feeders are traced so each label joins the right circuit (vector PDFs are traced too)",
+        "Schedules, single-line-diagram circuits and CAD blocks become candidate rows with From/To feeder links",
+        "Review: untick rows, check italic worked-out values and notes; fed-from-only feeders start unticked",
+        "Create the load list or add to the current one",
+        "The Cable Sizing sheet calculates and suggests blanks; fill flagged inputs (e.g. PF, runs) and export"
+      ],
+      "modules": [
+        "src/ui/LoadList.tsx",
+        "src/ui/Schematic.tsx",
+        "src/import/schematic-read.ts",
+        "src/import/schematic.ts",
+        "src/import/load-list.ts",
+        "src/engine/suggest.ts",
+        "src/engine/sheet.ts",
+        "src/import/drawing-ocr.ts",
+        "src/import/raster.ts"
+      ]
+    },
+    {
+      "id": "drums",
+      "steps": [
+        "Choose a load-list cable group or type whole runs",
+        "Use reviewed supplier options or a basic option",
+        "Enter physical cable dimensions and their source",
+        "Confirm dimensions for the selected product",
+        "Adjust flange/barrel/width, payload and site lifting limits",
+        "Inspect the rotating translucent view (drag to turn) and whole-run allocation",
+        "Export an enquiry CSV"
+      ],
+      "modules": [
+        "src/ui/Drums.tsx",
+        "src/ui/DrumSources.tsx",
+        "src/import/drum-catalogue.ts",
+        "src/engine/procurement.ts",
+        "src/engine/drums.ts",
+        "src/ui/DrumVisual.tsx"
+      ]
+    },
+    {
+      "id": "backup",
+      "steps": [
+        "Autosave valid version-2 project state to IndexedDB",
+        "Save JSON backup for portability",
+        "Open and validate a backup",
+        "Confirm workspace replacement",
+        "Recompute derived results",
+        "Start a new project from the project dialog (undoable until reload)"
+      ],
+      "modules": [
+        "src/store/schema.ts",
+        "src/store/project.ts",
+        "src/ui/state.ts",
+        "src/ui/App.tsx"
+      ]
+    }
+  ],
+  "modules": {
+    "src/main.tsx": "Mounts Preact and starts local project restoration/autosave.",
+    "src/ui/App.tsx": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, cross-tab conflict banner, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
+    "src/ui/state.ts": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced autosave and a BroadcastChannel warning when another tab saves the same project. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
+    "src/ui/SingleCable.tsx": "One unchanged workbook row, result strip, missing-input shortcuts, inline Calculation panel (pick a size from the ladder), print/PDF and Excel export.",
+    "src/ui/LoadList.tsx": "Import mapping dialog; header with Import menu (load list or schematic), Add row, a More menu (Print / PDF, Ask AI) and Export to Excel as the only primary action; one-line summary (status split, connected load on final circuits only, worst total VD opening its calculation, cable km toggling quantities with drum links, pending suggestions with Accept all); one filter bar (panel dropdown, status chips, search, issues list with jump-to-cell, Defaults popover for suggestion settings, View menu with screen-only column presets plus the colour key); bulk edit of selected rows, grid, calculation drawer and 'How the sheet works' notes. Appending enforces the 2,000-row project limit. Drop routing by file type, reading progress bar with Cancel, and the schematic review dialog.",
+    "src/ui/Sheet.tsx": "Grid of the workbook's 72 columns (A–BT) with workbook colours, dropdowns, Excel keys (Enter, arrows at text edges, Ctrl/⌘+D fill down, Delete clears dropdowns), row selection on the Item cell, optional filtered row order, calculation/delete row tools, block paste and virtualization above 60 visible rows. Optional screen-only column groups (GROUPS: a group row above the letters, hiding unpicked groups; A–D stay pinned) and per-row status marks on the Item cell.",
+    "src/engine/sheet.ts": "Pure workbook-equivalent formulas and dependent lists. CALC_COLS has 33 columns; INPUT_COLS has 39 (ITEM_COLS, the original 23, drive Item numbering). Numeric comparisons follow 15 significant digits. RowResult.helpers exposes the step05 helper columns (keys AT–AY, workbook BY–CD since step09) and helpers.fault (earthing system, nominal U0, transformer Z, Ze, Ia, IΔn, CPC type/k/multiplier/size/resistance, Ik, times, energies, final circuit). Earth fault loop for TN-S and TT with RCDs and CPC (AP–BG) and short circuit (BH–BO) via faultCells, chained from the feeding row (Ze ← Zs BB, TT only from a TT row; fault level ← BM); CHECK_COLS/failsCheck list every PASS/FAIL column (AG, AN, BE, BG, BJ, BO, BT). Motor starting VD (step09 BP–BT): BR = AL + (multiple − 1) × AK with the multiple typed (BQ) or the starter type's value on Lists (TABLES.starters), checked against BS or Settings Def_StartVD (15 %).",
+    "src/engine/suggest.ts": "Preliminary suggestions for protection, list-default cable/cores/method/VD and size/parallel sets. Settles upstream rows first.",
+    "src/engine/procurement.ts": "Groups valid rated products and expands parallel/physical cable runs. Single-core quantities count 3 per three-phase set or 2 per single-phase set; neutral and earth are excluded. Flags groups whose electrical checks are incomplete or fail.",
+    "src/engine/drums.ts": "Pure layer/turn geometry, bend-radius and payload/lift constraints, per-run allowance and first-fit decreasing allocation.",
+    "src/engine/result.ts": "Typed success/error union for recoverable engine results.",
+    "src/import/load-list.ts": "ExcelJS read-only workbook import, CSV/TSV parser, header aliases, explicit unit cleanup, mapping and drum-template parsing. Ambiguous numbers remain invalid instead of being partially parsed.",
+    "src/import/document.ts": "Local PDF text extraction with position-aware columns and English Tesseract OCR fallback. Used by supplier drum imports in this build.",
+    "src/import/drum-catalogue.ts": "Supplier drum CSV/XLSX import or explicitly labelled/unit-qualified PDF/image text extraction. Candidate values require review before activation.",
+    "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading; electrical catalogue UI is archived.",
+    "src/export/template.ts": "Patches only entered input cells in the original XLSX ZIP, retains all formulas/validations/styles, extends beyond 196 rows and adds preview caches.",
+    "src/store/schema.ts": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
+    "src/store/project.ts": "IndexedDB v2 persistence, limited v1 drum-setting migration, safe backup import and browser downloads.",
+    "src/ui/Drums.tsx": "Linked or typed runs, geometry confirmation, adaptor controls, allocation cards and enquiry export.",
+    "src/ui/DrumSources.tsx": "Supplier file chooser, extraction progress, review acknowledgement and basic/supplier selection.",
+    "src/ui/DrumVisual.tsx": "Code-native SVG drum on a continuous turntable rotation (28 s per turn) with convex-hull cylinder outlines and near/far flange draw order that flips with the angle. Drag to turn; stays still for prefers-reduced-motion and pauses off screen. Visual fill is illustrative.",
+    "src/ui/components.tsx": "Shared form, badge, notice, metric and number-format components.",
+    "src/ui/app.css": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
+    "src/data/sizing-tables.json": "Generated lookup data: 67 columns (A–BO), 3,260 ratings in 461 blocks, 27 temperature rows, 100 grouping keys and 7 soil rows. Also the FaultData tables (Cu resistance, k values, resistance multipliers, device multiples, transformer Uz) and the Settings defaults Ze, fault level, clearance time and Cmin. Plus the CPC type table (k, resistance multipliers, same-material and IEC 60228 flags) and the SS 638 Table 41.1 disconnection times (TN-S and TT), the earthing system list and the default earthing system.",
+    "scripts/extract-workbook.mjs": "Extracts workbook tables for the 67 app columns A–BO (validations of visible columns, all Settings notes, the FaultData sheet incl. CPC types, TN-S/TT disconnection times and the earthing list, and Settings defaults incl. Def_Earthing) and copies the unmodified template; checks contiguous lookup blocks.",
+    "scripts/build.mjs": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Asset checksums cover the exact copied package files, excluding unrelated sync-conflict copies that may exist in dist. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin and a restrictive Permissions-Policy.",
+    "scripts/verify-vendor.mjs": "Checks built local PDF/OCR assets against generated SHA-256 checksums.",
+    "scripts/dkg.mjs": "Generates this graph, code/import/export index, file hashes, change history and stale-check commands. Watches project files during dev.",
+    "scripts/verify.mjs": "Runs the full check sequence, records results against a source fingerprint and refreshes the DKG.",
+    "src/ui/Calculation.tsx": "Hand-calculation view of one row (Ib, k factors, minimum It, Iz, circuit and total VD), size ladder with pick buttons and the From→To feeder chain. Display only; values come from sheet.ts.",
+    "src/ui/Report.tsx": "Print-only A3 landscape report (schedule with suggested values marked, KPIs, cable quantities, open issues, Prepared/Checked/Approved block). Uses window.print; the browser saves PDF locally.",
+    "src/engine/explain.ts": "sizeLadder evaluates every size of the row's rating block through evaluateRow with the same current/VD tests as column AB; feederChain follows first-match From→To links. No independent maths.",
+    "src/engine/issues.ts": "Derives errors (invalid cells, current/VD FAIL), warnings (None passes, Out of range, duplicate To tags, total-VD chain breaks) and info (missing inputs) from calculated rows. Cell references use Excel row numbers.",
+    "src/import/guard.ts": "Pre-parse guards: XLSX ZIP central-directory size/entry limits (checkZip) and image header dimensions (imageSize/checkImage, 12,000 px side / 60 MP) before any decoder runs; used by load-list, schematic and drum/catalogue imports.",
+    "src/import/schematic.ts": "Pure, deterministic schematic-to-load-list engine (no AI). DXF parser (TEXT/MTEXT/ATTRIB, binary/size guards, bounded MTEXT clean-up), glyph/word merging on shared baselines, readFacts (breaker A, poles/phase, kW/HP/W/kVA, PF, diversity, voltage incl. 400/230 pairs but not cable insulation ratings, cable type/cores/size/sets, run length, tags, board names, fed-from/feeds-to, spares, title-block words), circuit-schedule table detection (reuses detectColumns/toSheetRows plus cell rescue), single-line-diagram grouping around breaker ratings for column or row layouts with a proximity fallback, board ownership, From→To feeder chain, deduplication across drawings, inferred values with reasons, and limits (100k text items, 20k per page, 4k breakers per page, 200 pages, 2,000 candidates). Traced line work (from images or rendered PDF pages) gives one row per feeder: the busbar label (board tag first, within 7 text heights above or 15 left of its start) is From for drops and To for incomers; labels attach to the nearest feeder by distance from the nearest part of the text, with the far end counting 4 text heights closer and vertical text along the feeder preferred for the load name. Also reads US/MV notation (6-1/C 500 → 1C, 500 kcmil, 2 sets; 3/0 AWG; ft and miles to metres; MW, MVA), ETAP-style tags (TR:4, 3WTR:1, Bus A), transformer ratings into B, and treats a bare C16 as an MCB rating only on pages that mention MCBs or amps.",
+    "src/import/schematic-read.ts": "Browser reader for schematics: pdf.js text with page rotation and text direction, OCR (sparse-text mode) for pages without a text layer or for images, UTF-8/Windows-1252 DXF decoding, cancel support, 25 MB/page/text-item limits, image header dimension check before decoding, friendly pdf.js and DWG messages. Images and scanned PDF pages go through drawing-ocr (scale up to 2x for small screenshots, 24 MP working budget); vector PDF pages are rendered to trace busbars and feeders under the text layer. Returns the text read for the review.",
+    "src/ui/Schematic.tsx": "Review dialog for circuits read from a schematic: tick/untick rows, page and source text per row, worked-out values in italics with their reason, notes (spares skipped, unsupported voltages, DC, unticked fed-from feeders), Create load list / Add to current list. Opens even when no circuits are recognised, explaining why and showing the text that was read; a collapsible \"Text read from the drawing\" panel is always available.",
+    "src/import/raster.ts": "Pure image helpers for drawings (plain RGBA arrays, linear in pixels): luminance, Otsu threshold, ink mask, line mask that ignores strongly coloured mark-ups, letter stem height measured from vertical run lengths, straight-stroke detection with thickness, box detection (breaker/symbol outlines found before lines are erased) and outline erasing, OCR clean image with long lines erased, quarter-turn rotation and mapping of rotated word boxes, and feeder tracing: busbars are long horizontal strokes with feeders (two if heavier than other long lines, else three; twice-bent cable routes rejected), feeders are followed through bends and across symbol gaps (breakers, fuses, coils) using an endpoint grid. Limits: 8,000 strokes, 60 busbars, 1,500 feeders.",
+    "src/import/drawing-ocr.ts": "Image pipeline shared by browser and tests: clean image (threshold, long lines and symbol boxes erased), OCR in three orientations (upright, upward, downward text) with tiling for large sheets, noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry."
+  },
+  "calculationReference": {
+    "electrical": "I1 = kW × diversity × 1000 / (V × PF × (sqrt(3) for 3-phase, else 1)); Ib = I1 × sqrt(1 + THD²); Iz = It × parallel × Ca × Cg × Cs × Ci × Ct; circuit VD% = Ib × run_m × mV/A/m / (10 × parallel × V).",
+    "suggestedSize": "Preserves original workbook row-order/count-failing-candidates formula. Source ratings are ordered contiguous blocks; do not replace it independently of Excel parity.",
+    "upstream": "Total VD uses the first To matching From. Blank From gives blank total VD. A nonblank unmatched From is a supply boundary with zero upstream VD.",
+    "drum": "layers=floor((flange-2clearance-barrel)/(2OD)); turns=floor(width/OD); geometric_m=pi*turns*(layers*barrel+OD*layers²)/1000; capacity=min(supplier_override_or_geometric*fill, min(payload,lift-tare)*1000/kg_per_km).",
+    "earthFaultLoop": "TN-S and TT, SS 638:2018 / IEC 60364 (step08 AP-BG). Earthing system per row (AP, blank = Settings Def_Earthing TN-S). U0 = nominal (V/sqrt3 rounded to 10 V for 3-ph, V for 1-ph). Required disconnection time = SS 638 Table 41.1 by system and U0 for final circuits (In <= 32 A, To feeds no row): TN-S 0.8/0.4/0.2/0.1 s, TT 0.3/0.2/0.07/0.04 s; else TN-S 5 s (411.3.2.3L), TT 1 s (411.3.2.4L). R1+R2 = (r20 phase x m phase + r20 CPC x m CPC) x run / (1000 x parallel). Zs = Ze + R1+R2 (TT Ze typed or from a TT feeding row). Max = larger of the overcurrent limit (TN-S Cmin x U0 / Ia, 411.4.5L; TT 50 / Ia, 411.5.4L) and the RCD limit 50 / IDn (TN-S 411.4.5L, TT 411.5.3L / Table 41.5). Check: TN-S Zs <= max; TT Ra (typed) or Zs <= max. Ia = 5/10/20 x In for MCB B/C/D or typed. If = U0/Zs. CPC: Table 54.2 minimum; PASS by selection when CPC >= minimum, else adiabatic (k2 x S x n)^2 >= If^2 x t. Computed by the app (faultCells) and checked against tests/fixtures/excel-fault-crosscheck.json (165 circuits).",
+    "shortCircuit": "IEC 60364-4-43:2023 431.5.4 (step08 BH-BO): breaking capacity >= fault level at From (431.5.4.1). I2t = typed let-through or (Ik_from x 1000)^2 x t; min size = sqrt(I2t)/(k x parallel), k from 4-43 Table 2 (115/103 PVC, 143 XLPE); PASS when size >= min, else FAIL, or 'Check let-through' for an MCB row with no let-through (431.5.4.2: below 0.1 s the device let-through applies). Ik_to = Ik_from / sqrt(1 + (m x r20 x run/(1000 x parallel) x Ik_from x 1000 / U0)^2), m 1 (3-ph) or 2 (1-ph). Computed by the app and checked against tests/fixtures/excel-fault-crosscheck.json (165 circuits)."
+  },
+  "dataContracts": {
+    "projectVersion": 2,
+    "projectKey": "spool-project-v2",
+    "worksheet": "Record of input column letters to strings; derived results are recomputed.",
+    "physicalDimensions": "OD in mm, cable mass in kg/km, minimum bend radius as a multiple of OD.",
+    "drumDimensions": "Flange/barrel/winding width/clearance in mm; payload/tare/lift in kg; allowance in percent.",
+    "limits": {
+      "loadRows": 2000,
+      "fileMB": 25,
+      "workbookSheets": 30,
+      "worksheetRows": 10000,
+      "worksheetColumns": 200,
+      "pdfPages": 200,
+      "drumOptions": 100,
+      "drumRuns": 2000,
+      "xlsxUncompressedMB": 200,
+      "xlsxZipEntries": 5000,
+      "undoSteps": 300,
+      "csvRows": 10000,
+      "csvColumns": 200,
+      "cellChars": 300,
+      "schematicTextItems": 100000,
+      "schematicTextItemsPerPage": 20000,
+      "schematicBreakersPerPage": 4000,
+      "schematicPages": 200,
+      "schematicCandidates": 2000,
+      "imageSidePx": 12000,
+      "imageMegapixels": 60,
+      "dxfLines": 12000000
+    },
+    "migration": "Version-1 autosaves retain only compatible drum settings and project name. Earlier circuit/catalogue models are not silently converted."
+  },
+  "knownLimits": [
+    "Electrical calculations reproduce the supplied workbook; a PASS covers its current-capacity and voltage-drop checks, not a complete certified installation design.",
+    "Stored fixture provenance says Microsoft Excel recalculated 260 rows on 2026-10-28. Regression tests compare those recorded values; they do not launch Excel on every run.",
+    "Imported XLSX formulas use saved results, which can be stale. The UI asks engineers to recalculate/save the source before import.",
+    "Duplicate To tags retain the workbook's first-match semantics. Engineers must resolve ambiguous network names; cycles cannot provide a meaningful total VD.",
+    "The original workbook's underground grouping table repeats factors beyond six circuits. These are preserved for parity and require engineering validation for the actual arrangement.",
+    "No automatic cable diameter, mass or bend-radius inference from cross-section. Dimensions must match the exact product and be confirmed for each selected group.",
+    "Single-core run counts omit neutral and earth. Add separately when their product/size differs or plan explicit typed runs when extra conductors are required.",
+    "Supplier PDF/OCR extraction handles explicitly labelled units, not arbitrary unlabeled tabulations. Use reviewed CSV/XLSX or manual adaptor inputs when extraction is incomplete.",
+    "No cable-catalogue/IEC electrical workflow, authentication, multi-user revisions, purchase orders, cloud backend or published site is active in this version.",
+    "IndexedDB is origin-specific and browser storage can be cleared. Keep JSON project backups and exported workbooks.",
+    "Undo history is lost on reload. Use JSON backups for checkpoints.",
+    "Print/PDF relies on the browser print dialog; choose A3 landscape and enable background graphics for PASS/FAIL shading.",
+    "The cross-tab warning detects saves from other tabs of the same browser profile only.",
+    "Security headers are sent by the local dev server; a different static host must be configured to send equivalent headers.",
+    "The drum turntable animates with requestAnimationFrame, so browsers pause it in hidden tabs or panes.",
+    "Schematic recognition is rule-based. It reads text, not line work: connections are inferred from where annotations sit (around each breaker rating, in schedule tables or in CAD block attributes). Unusual layouts can group text wrongly, so the review step is mandatory reading. Tags are taken as written; differently spelt board names (MSB1 vs MSB-1) are not linked.",
+    "Image reading (screenshots, scans, PDFs without a text layer) uses on-device OCR in three orientations plus line tracing of busbars and feeders. It handles orthogonal single-line diagrams; diagonal lines, dense overlapping labels, red-line mark-ups over text and very small text (under about 10 px) read poorly. Numbers from OCR must be checked in the review.",
+    "DWG is not readable; export ASCII DXF or PDF. Binary DXF and block-definition text other than attributes are not read. AWG/kcmil sizes, DC systems and voltages outside the workbook list are kept but cannot be sized by the workbook.",
+    "The workbook ratings cover LV cables (230–690 V). Medium/high-voltage drawings (e.g. 13.8 kV, 138 kV) are read and listed with their drawing voltage, but rows show as invalid on the sheet until MV rating tables are supplied.",
+    "Earth fault loop, RCD, CPC and short-circuit columns AP-BO cover TN-S and TT only (SS 638:2018, IEC 60364). Ze and fault level default to blank (not assumed); a TT row needs Ze typed or a TT feeding row. Not modelled: TN-C, TN-C-S and IT systems, cable reactance (Zs reads low above about 35 mm2), the IEC 60909 voltage factor c and minimum fault currents, RCD discrimination, the TN-S times allowed for a bonded TT installation on an overcurrent device, electrode stability above 200 ohms, Annex A.3 exemptions, fuse Zs tables (type Ia). A separate copper CPC is taken as PVC-insulated and not bunched; armour and tape need catalogue area and resistance."
+  ],
+  "changeGuide": [
+    {
+      "task": "Change a formula",
+      "read": [
+        "src/engine/sheet.ts",
+        "tests/sheet.test.ts",
+        "tests/fixtures/excel-crosscheck.json"
+      ],
+      "checks": [
+        "npm test",
+        "npm run typecheck"
+      ],
+      "rule": "Keep workbook parity; regenerate appropriate Excel fixtures if a source-workbook revision is explicitly authorized."
+    },
+    {
+      "task": "Change import parsing",
+      "read": [
+        "src/import/load-list.ts",
+        "src/ui/LoadList.tsx",
+        "tests/load-list.test.ts"
+      ],
+      "rule": "Preserve malformed values for review and retain explicit units; test round-trip import/export."
+    },
+    {
+      "task": "Change the export",
+      "read": [
+        "src/export/template.ts",
+        "public/templates/cable-sizing.xlsx",
+        "tests/sheet.test.ts"
+      ],
+      "rule": "Preserve template XML, OFFSET validations and all original lookup sheets, plus the live earth loop / short-circuit columns AP-BO, helpers BP-CP and the FaultData sheet."
+    },
+    {
+      "task": "Change drums",
+      "read": [
+        "src/engine/drums.ts",
+        "src/engine/procurement.ts",
+        "src/ui/Drums.tsx",
+        "src/ui/DrumSources.tsx",
+        "src/ui/DrumVisual.tsx"
+      ],
+      "rule": "Test whole-run conservation, OD-specific overrides, bend radius, payload/lift and changes to linked products."
+    },
+    {
+      "task": "Any change",
+      "read": [
+        "AGENTS.md",
+        "spool-studio.dkg"
+      ],
+      "rule": "Use the graph to locate relevant files; read those files before editing. Update docs/project-knowledge.json when semantics change, run checks, refresh the DKG. Run tests/hardening.test.ts; any new file or text input needs size limits and a hostile-input test."
+    },
+    {
+      "task": "Change the dashboard, issues, calculation panel or report",
+      "read": [
+        "src/ui/LoadList.tsx",
+        "src/ui/Calculation.tsx",
+        "src/ui/Report.tsx",
+        "src/engine/issues.ts",
+        "src/engine/explain.ts",
+        "tests/upgrades.test.ts"
+      ],
+      "checks": [
+        "npm run check"
+      ],
+      "rule": "Derive from sheet.ts results; keep cell references in Excel row numbers; keep print styles inside @media print."
+    },
+    {
+      "task": "Change schematic import",
+      "read": [
+        "src/import/schematic.ts",
+        "src/import/schematic-read.ts",
+        "src/ui/Schematic.tsx",
+        "tests/schematic.test.ts",
+        "src/import/raster.ts",
+        "src/import/drawing-ocr.ts",
+        "tests/drawing.test.ts"
+      ],
+      "checks": [
+        "npm test",
+        "npm run check"
+      ],
+      "rule": "Keep extraction deterministic and value-preserving; record every worked-out value in inferred with a reason; keep limits and linear-time parsing; add a synthetic drawing test for each new layout or notation."
+    }
+  ]
+}
