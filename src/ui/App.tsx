@@ -1,6 +1,6 @@
 import {useState,useRef,useEffect} from 'preact/hooks';
-import {Cable,ListChecks,Box,X,Check,PencilLine,Info,Save,FolderOpen,Undo2,Redo2,Keyboard,RefreshCw,Sun,Moon,FilePlus} from 'lucide-preact';
-import {project,tab,toast,saveStatus,updateProject,notify,history,undo,redo,conflict,theme,saveProblem,newProject,type Tab} from './state';
+import {Cable,ListChecks,Box,X,Check,PencilLine,Info,Save,FolderOpen,Undo2,Redo2,Keyboard,Sun,Moon,FilePlus} from 'lucide-preact';
+import {project,tab,toast,saveStatus,updateProject,notify,history,undo,redo,theme,saveProblem,newProject,type Tab} from './state';
 import {Report} from './Report';
 import {saveProject,openProject} from '../store/project';
 import {SingleCable} from './SingleCable';
@@ -20,7 +20,6 @@ export function App(){const [help,setHelp]=useState(false),[rename,setRename]=us
   </header>
   <input ref={backup} class="visually-hidden" type="file" accept=".json,.spool.json" aria-label="Project backup file" onChange={async e=>{const input=e.currentTarget,file=input.files?.[0];if(!file)return;try{setPending(await openProject(file));}catch(error){notify(error instanceof Error?error.message:'Could not open backup.');}finally{input.value='';}}}/>
   {pending&&<div class="modal-backdrop"><section class="modal small-modal" role="dialog" aria-modal="true" aria-label="Open project backup"><h2>Open {pending.name}?</h2><p>This replaces the current workspace. Save a backup of current inputs first if you need them.</p><div class="modal-actions"><button class="button secondary small" onClick={()=>setPending(null)}>Cancel</button><button class="button primary small" onClick={()=>{updateProject(pending);setPending(null);notify('Project restored. Results recalculated.');}}>Open backup</button></div></section></div>}
-  {conflict.value&&<div class="conflict" role="alert"><RefreshCw size={15}/><span>This project was changed in another tab. Reload to see those changes; your next edit here would save over them.</span><button class="button secondary small" onClick={()=>location.reload()}>Reload</button><button class="icon-button" aria-label="Dismiss" onClick={()=>conflict.value=false}><X size={15}/></button></div>}
   <main class="page">{active==='single'?<SingleCable/>:active==='list'?<LoadList/>:<Drums/>}</main>
   {toast.value&&<div class="toast" role="status"><Info size={17}/><span>{toast.value}</span><button class="icon-button" aria-label="Dismiss notification" onClick={()=>toast.value=''}><X size={15}/></button></div>}
   {rename&&<div class="modal-backdrop"><section class="modal small-modal" role="dialog" aria-modal="true" aria-label="Project"><h2>Project</h2><p class="muted">Used for exported file names.</p><label class="field"><span>Name</span><input value={project.value.name} maxLength={100} onInput={e=>{const name=e.currentTarget.value;if(name.trim())updateProject({name},'name');}}/></label>

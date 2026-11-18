@@ -9,7 +9,7 @@
       "Original-template XLSX export",
       "Supplier/basic drum options with text/OCR import; editable Keystone installation and fixed-bend references, distinct from the entered drum barrel limit (2026-11-17)",
       "Translucent adjustable drum model (auto-rotating)",
-      "Local autosave and portable JSON backups",
+      "Autosave in the open tab only (a new tab or browser starts blank) and portable JSON backups",
       "Calculation panel with size ladder and feeder chain (2026-10-30)",
       "Load-list dashboard: KPIs, filters, search, issues list, bulk edit (2026-10-30)",
       "App-wide undo/redo and Excel-style keyboard editing (2026-10-30)",
@@ -65,7 +65,7 @@
     "Every saved sheet cell holds at most 300 characters (MAX_CELL); imports, pastes and inputs clip to it so autosave and backups keep working.",
     "Numeric inputs follow Excel: only plain decimal numbers are numbers (0x1A, 0b11, Infinity are invalid). Exports never write non-finite cached values or XML-forbidden characters.",
     "Untrusted files are size-checked before parsing: CSV/TSV ≤10,000 rows and ≤200 columns, images by header dimensions, PDF page/text/image limits, DXF line/text limits. Avoid spreading large arrays into function calls (Math.max(...), push(...)).",
-    "The app ships with no example project: the reference workbook is the source of the formulas and tables only. A fresh workspace is \"Untitled project\" with empty sheets.",
+    "The app ships with no example project: the reference workbook is the source of the formulas and tables only. A fresh workspace is \"Untitled project\" with empty sheets and no cable runs; drum and cable specifications keep their editable defaults.",
     "Drawing images are processed on the device only; image size is checked from the file header before decoding, OCR words are capped at 8,000 per pass and tracing is bounded (strokes, busbars, feeders).",
     "Workbook columns A-AO keep their letters. Columns added to the workbook go after AO, with helpers after them; the export rewrites the filter range for any last column."
   ],
@@ -165,7 +165,7 @@
     {
       "id": "backup",
       "steps": [
-        "Autosave valid version-2 project state to IndexedDB",
+        "Autosave valid version-2 project state to this tab's sessionStorage; delete any older IndexedDB copy on start",
         "Save JSON backup for portability",
         "Open and validate a backup",
         "Confirm workspace replacement",
@@ -182,7 +182,7 @@
   ],
   "modules": {
     "src/main.tsx": "Mounts Preact and starts local project restoration/autosave.",
-    "src/ui/App.tsx": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, cross-tab conflict banner, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
+    "src/ui/App.tsx": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
     "src/ui/state.ts": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced autosave and a BroadcastChannel warning when another tab saves the same project. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
     "src/ui/SingleCable.tsx": "One unchanged workbook row, result strip, missing-input shortcuts, inline Calculation panel (pick a size from the ladder), print/PDF and Excel export.",
     "src/ui/LoadList.tsx": "Import mapping dialog; header with Import menu (load list or schematic), Add row, a More menu (Print / PDF, Ask AI) and Export to Excel as the only primary action; one-line summary (status split, connected load on final circuits only, worst total VD opening its calculation, cable km toggling quantities with drum links, pending suggestions with Accept all); one filter bar (panel dropdown, status chips, search, issues list with jump-to-cell, Defaults popover for suggestion settings, View menu with screen-only column presets plus the colour key); bulk edit of selected rows, grid, calculation drawer and 'How the sheet works' notes. Appending enforces the 2,000-row project limit. Drop routing by file type, reading progress bar with Cancel, and the schematic review dialog.",
@@ -198,7 +198,7 @@
     "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading; electrical catalogue UI is archived.",
     "src/export/template.ts": "Patches only entered input cells in the original XLSX ZIP, retains all formulas/validations/styles, extends beyond 196 rows and adds preview caches.",
     "src/store/schema.ts": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
-    "src/store/project.ts": "IndexedDB v2 persistence, limited v1 drum-setting migration, safe backup import and browser downloads.",
+    "src/store/project.ts": "Per-tab sessionStorage persistence (a new tab starts blank), removal of the old IndexedDB device copy, safe backup import and browser downloads.",
     "src/ui/Drums.tsx": "Linked or typed runs, geometry confirmation, adaptor controls, allocation cards and enquiry export.",
     "src/ui/DrumSources.tsx": "Supplier file chooser, extraction progress, review acknowledgement and basic/supplier selection.",
     "src/ui/DrumVisual.tsx": "Code-native SVG drum on a continuous turntable rotation (28 s per turn) with convex-hull cylinder outlines and near/far flange draw order that flips with the angle. Drag to turn; stays still for prefers-reduced-motion and pauses off screen. Visual fill is illustrative.",
@@ -259,7 +259,7 @@
       "imageMegapixels": 60,
       "dxfLines": 12000000
     },
-    "migration": "Version-1 autosaves retain only compatible drum settings and project name. Earlier circuit/catalogue models are not silently converted."
+    "migration": "Older device autosaves (IndexedDB) are deleted on start, not restored. Earlier circuit/catalogue models are not silently converted."
   },
   "knownLimits": [
     "Electrical calculations reproduce the supplied workbook; a PASS covers its current-capacity and voltage-drop checks, not a complete certified installation design.",
@@ -271,7 +271,7 @@
     "Single-core run counts omit neutral and earth. Add separately when their product/size differs or plan explicit typed runs when extra conductors are required.",
     "Supplier PDF/OCR extraction handles explicitly labelled units, not arbitrary unlabeled tabulations. Use reviewed CSV/XLSX or manual adaptor inputs when extraction is incomplete.",
     "No cable-catalogue/IEC electrical workflow, authentication, multi-user revisions, purchase orders, cloud backend or published site is active in this version.",
-    "IndexedDB is origin-specific and browser storage can be cleared. Keep JSON project backups and exported workbooks.",
+    "Work lasts only while its tab is open. Keep JSON project backups and exported workbooks.",
     "Undo history is lost on reload. Use JSON backups for checkpoints.",
     "Print/PDF relies on the browser print dialog; choose A3 landscape and enable background graphics for PASS/FAIL shading.",
     "The cross-tab warning detects saves from other tabs of the same browser profile only.",

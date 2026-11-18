@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "d14c2bce0641d2762e5d057480b60157dc68f7f3b678a95e516fe94361a2eb4d",
+  "sourceFingerprint": "883f79a3611a3ecc348b87a382649613925c09faf121b3ad7a0f685f900d34cf",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -25,7 +25,7 @@
         "Original-template XLSX export",
         "Supplier/basic drum options with text/OCR import; editable Keystone installation and fixed-bend references, distinct from the entered drum barrel limit (2026-11-17)",
         "Translucent adjustable drum model (auto-rotating)",
-        "Local autosave and portable JSON backups",
+        "Autosave in the open tab only (a new tab or browser starts blank) and portable JSON backups",
         "Calculation panel with size ladder and feeder chain (2026-10-30)",
         "Load-list dashboard: KPIs, filters, search, issues list, bulk edit (2026-10-30)",
         "App-wide undo/redo and Excel-style keyboard editing (2026-10-30)",
@@ -81,7 +81,7 @@
       "Every saved sheet cell holds at most 300 characters (MAX_CELL); imports, pastes and inputs clip to it so autosave and backups keep working.",
       "Numeric inputs follow Excel: only plain decimal numbers are numbers (0x1A, 0b11, Infinity are invalid). Exports never write non-finite cached values or XML-forbidden characters.",
       "Untrusted files are size-checked before parsing: CSV/TSV ≤10,000 rows and ≤200 columns, images by header dimensions, PDF page/text/image limits, DXF line/text limits. Avoid spreading large arrays into function calls (Math.max(...), push(...)).",
-      "The app ships with no example project: the reference workbook is the source of the formulas and tables only. A fresh workspace is \"Untitled project\" with empty sheets.",
+      "The app ships with no example project: the reference workbook is the source of the formulas and tables only. A fresh workspace is \"Untitled project\" with empty sheets and no cable runs; drum and cable specifications keep their editable defaults.",
       "Drawing images are processed on the device only; image size is checked from the file header before decoding, OCR words are capped at 8,000 per pass and tracing is bounded (strokes, busbars, feeders).",
       "Workbook columns A-AO keep their letters. Columns added to the workbook go after AO, with helpers after them; the export rewrites the filter range for any last column."
     ],
@@ -181,7 +181,7 @@
       {
         "id": "backup",
         "steps": [
-          "Autosave valid version-2 project state to IndexedDB",
+          "Autosave valid version-2 project state to this tab's sessionStorage; delete any older IndexedDB copy on start",
           "Save JSON backup for portability",
           "Open and validate a backup",
           "Confirm workspace replacement",
@@ -198,7 +198,7 @@
     ],
     "modules": {
       "src/main.tsx": "Mounts Preact and starts local project restoration/autosave.",
-      "src/ui/App.tsx": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, cross-tab conflict banner, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
+      "src/ui/App.tsx": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
       "src/ui/state.ts": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced autosave and a BroadcastChannel warning when another tab saves the same project. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
       "src/ui/SingleCable.tsx": "One unchanged workbook row, result strip, missing-input shortcuts, inline Calculation panel (pick a size from the ladder), print/PDF and Excel export.",
       "src/ui/LoadList.tsx": "Import mapping dialog; header with Import menu (load list or schematic), Add row, a More menu (Print / PDF, Ask AI) and Export to Excel as the only primary action; one-line summary (status split, connected load on final circuits only, worst total VD opening its calculation, cable km toggling quantities with drum links, pending suggestions with Accept all); one filter bar (panel dropdown, status chips, search, issues list with jump-to-cell, Defaults popover for suggestion settings, View menu with screen-only column presets plus the colour key); bulk edit of selected rows, grid, calculation drawer and 'How the sheet works' notes. Appending enforces the 2,000-row project limit. Drop routing by file type, reading progress bar with Cancel, and the schematic review dialog.",
@@ -214,7 +214,7 @@
       "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading; electrical catalogue UI is archived.",
       "src/export/template.ts": "Patches only entered input cells in the original XLSX ZIP, retains all formulas/validations/styles, extends beyond 196 rows and adds preview caches.",
       "src/store/schema.ts": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
-      "src/store/project.ts": "IndexedDB v2 persistence, limited v1 drum-setting migration, safe backup import and browser downloads.",
+      "src/store/project.ts": "Per-tab sessionStorage persistence (a new tab starts blank), removal of the old IndexedDB device copy, safe backup import and browser downloads.",
       "src/ui/Drums.tsx": "Linked or typed runs, geometry confirmation, adaptor controls, allocation cards and enquiry export.",
       "src/ui/DrumSources.tsx": "Supplier file chooser, extraction progress, review acknowledgement and basic/supplier selection.",
       "src/ui/DrumVisual.tsx": "Code-native SVG drum on a continuous turntable rotation (28 s per turn) with convex-hull cylinder outlines and near/far flange draw order that flips with the angle. Drag to turn; stays still for prefers-reduced-motion and pauses off screen. Visual fill is illustrative.",
@@ -275,7 +275,7 @@
         "imageMegapixels": 60,
         "dxfLines": 12000000
       },
-      "migration": "Version-1 autosaves retain only compatible drum settings and project name. Earlier circuit/catalogue models are not silently converted."
+      "migration": "Older device autosaves (IndexedDB) are deleted on start, not restored. Earlier circuit/catalogue models are not silently converted."
     },
     "knownLimits": [
       "Electrical calculations reproduce the supplied workbook; a PASS covers its current-capacity and voltage-drop checks, not a complete certified installation design.",
@@ -287,7 +287,7 @@
       "Single-core run counts omit neutral and earth. Add separately when their product/size differs or plan explicit typed runs when extra conductors are required.",
       "Supplier PDF/OCR extraction handles explicitly labelled units, not arbitrary unlabeled tabulations. Use reviewed CSV/XLSX or manual adaptor inputs when extraction is incomplete.",
       "No cable-catalogue/IEC electrical workflow, authentication, multi-user revisions, purchase orders, cloud backend or published site is active in this version.",
-      "IndexedDB is origin-specific and browser storage can be cleared. Keep JSON project backups and exported workbooks.",
+      "Work lasts only while its tab is open. Keep JSON project backups and exported workbooks.",
       "Undo history is lost on reload. Use JSON backups for checkpoints.",
       "Print/PDF relies on the browser print dialog; choose A3 landscape and enable background graphics for PASS/FAIL shading.",
       "The cross-tab warning detects saves from other tabs of the same browser profile only.",
@@ -444,7 +444,6 @@
       "@preact/signals": "2.3.2",
       "@tesseract.js-data/eng": "1.0.0",
       "exceljs": "4.4.0",
-      "idb-keyval": "6.2.2",
       "jszip": "3.10.2",
       "lucide-preact": "0.468.0",
       "pdfjs-dist": "5.4.296",
@@ -875,8 +874,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-18T02:18:50.772Z",
-    "sourceFingerprint": "d14c2bce0641d2762e5d057480b60157dc68f7f3b678a95e516fe94361a2eb4d",
+    "checkedAt": "2026-11-18T02:39:41.317Z",
+    "sourceFingerprint": "883f79a3611a3ecc348b87a382649613925c09faf121b3ad7a0f685f900d34cf",
     "status": "passed",
     "steps": [
       {
@@ -919,15 +918,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 7511,
-      "sha256": "a02d16798517ae50face7a910483dee9913fb5210c50735878cd7ffcb2564916",
+      "bytes": 7739,
+      "sha256": "2035f376563a0fff16a38c0d07df4cdf28e3126487ae73a5d1e33cfcc7cc11d3",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "docs/project-knowledge.json",
-      "bytes": 36428,
-      "sha256": "ba3c68bcc61d180d7f6c96587b3a00554a08c07d7e4f4eaa694e5e9be9bc6e54",
+      "bytes": 36600,
+      "sha256": "b110998cb7ef7b7c956d51a7bd7582c40570fe9a946bb8fd9cc1f638098eab4b",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -941,21 +940,21 @@
     {
       "path": "docs/verification.json",
       "bytes": 645,
-      "sha256": "8120790aed9c656c510ad7a553c1c4f342204fa01ade078c03840644cf2a50b9",
+      "sha256": "8612d9c5da03637e0430e7c94b62fc240f2b6058d11e03478f678c1bf37d30aa",
       "role": "Project documentation.",
       "runtime": false
     },
     {
       "path": "package-lock.json",
-      "bytes": 179033,
-      "sha256": "609b09463d3569b971f79123d5c9aee63729941e561f663a7bd450052d9f58ee",
+      "bytes": 179002,
+      "sha256": "3484716237d37b89838d3f16b0e08036c1fa63e0ead91398ddf87ef1726fb612",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "package.json",
-      "bytes": 1056,
-      "sha256": "9c63c4b57d5e58495e2e0e93741d6605c6b9e5c3fcc8f4b655234d3adfeae1f0",
+      "bytes": 1029,
+      "sha256": "357e06a4e5fedbbced0238ce703dae75edf7816b9d357895346612ed36fcef35",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1490,19 +1489,19 @@
     },
     {
       "path": "src/store/project.ts",
-      "bytes": 1941,
-      "sha256": "0e422d44e6be706eee41da5349d9a2ed29d38492ce83b4c33aaa82b4b1cc959a",
-      "role": "IndexedDB v2 persistence, limited v1 drum-setting migration, safe backup import and browser downloads.",
+      "bytes": 1809,
+      "sha256": "64ffc298b9e65bcc44dd2f4ee0c6ac98e007a59bcf8eb2e8df4143e738ca2664",
+      "role": "Per-tab sessionStorage persistence (a new tab starts blank), removal of the old IndexedDB device copy, safe backup import and browser downloads.",
       "exports": [
         "autosaveProject",
         "downloadFile",
+        "forgetDeviceCopy",
         "openProject",
         "restoreProject",
         "saveProject"
       ],
       "imports": [
-        "./schema",
-        "idb-keyval"
+        "./schema"
       ],
       "runtime": true
     },
@@ -1548,9 +1547,9 @@
     },
     {
       "path": "src/ui/App.tsx",
-      "bytes": 7438,
-      "sha256": "248d431efd66e27d68bef4ec3da08db343a4f1ff5b0339a597ec2ce678073d9d",
-      "role": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, cross-tab conflict banner, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
+      "bytes": 7018,
+      "sha256": "a46db8ebdc32933f87ea41bd684435a05a6e62dfd9e0e97a55dd5fffee9ec3c8",
+      "role": "Three active tabs, undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
       "exports": [
         "App"
       ],
@@ -1637,8 +1636,8 @@
     },
     {
       "path": "src/ui/Drums.tsx",
-      "bytes": 12411,
-      "sha256": "a5476d01f1407a493f754e4abc12422464478dff616f7d2b48147dc0dd306ae3",
+      "bytes": 12458,
+      "sha256": "283d130b6afb9ed06ca43c6467cfab7bf4829cab33b19184cb1261406d6b359c",
       "role": "Linked or typed runs, geometry confirmation, adaptor controls, allocation cards and enquiry export.",
       "exports": [
         "Drums"
@@ -1769,8 +1768,8 @@
     },
     {
       "path": "src/ui/app.css",
-      "bytes": 89600,
-      "sha256": "bb739c51ac6c4c1ef6d844eb09b187d121ef829ebdf30315ecf65d103a46fe0d",
+      "bytes": 89398,
+      "sha256": "0d091efdd15acedda7b4b7e6a9680e1c8b6cf7a912f6f15c7d567595c5e86b78",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -1796,15 +1795,14 @@
     },
     {
       "path": "src/ui/state.ts",
-      "bytes": 8373,
-      "sha256": "05ac5cf5889b3bf09d2fffbc7ed42ac7f5d08e9c7ed107b4049254440720e2f0",
+      "bytes": 7970,
+      "sha256": "111db5856a46bc0b3ab37c7588112b81ea68966d54c72eb4a2f20400100e034a",
       "role": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced autosave and a BroadcastChannel warning when another tab saves the same project. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
       "exports": [
         "ListFilter",
         "Tab",
         "acceptAll",
         "cableGroups",
-        "conflict",
         "drumPlan",
         "exportExcel",
         "exporting",
@@ -2557,11 +2555,6 @@
       "to": "src/store/schema.ts",
       "relation": "imports",
       "resolved": true
-    },
-    {
-      "from": "src/store/project.ts",
-      "to": "idb-keyval",
-      "relation": "external"
     },
     {
       "from": "src/store/schema.ts",
@@ -3503,6 +3496,46 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-18T02:18:50.817Z",
-  "history": []
+  "updatedAt": "2026-11-18T02:39:41.363Z",
+  "history": [
+    {
+      "at": "2026-11-18T02:37:58.349Z",
+      "added": [],
+      "modified": [
+        "README.md",
+        "docs/project-knowledge.json",
+        "package-lock.json",
+        "package.json",
+        "src/store/project.ts",
+        "src/ui/App.tsx",
+        "src/ui/app.css",
+        "src/ui/state.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-18T02:37:59.186Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-18T02:38:42.875Z",
+      "added": [],
+      "modified": [
+        "src/ui/Drums.tsx"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-18T02:39:41.363Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    }
+  ]
 }

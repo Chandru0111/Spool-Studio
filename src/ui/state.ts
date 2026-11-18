@@ -5,10 +5,10 @@ import { selectedDrumOption,loadListGroups } from '../engine/procurement';
 import { planDrums,parseRuns } from '../engine/drums';
 import { calculateRow,clip,emptyRow,type InputCol,type SheetRow } from '../engine/sheet';
 import { suggestSheet,acceptSuggestions,defaultSuggestions,type SuggestDefaults } from '../engine/suggest';
-import { autosaveProject,restoreProject } from '../store/project';
+import { autosaveProject,forgetDeviceCopy,restoreProject } from '../store/project';
 import { exportSheet,panelSheets } from '../export/template';
 // A neutral starting workspace; reference workbooks are examples, not the user's project.
-export const fresh=():Project=>Project.parse({schemaVersion:2,sheetLayout:8,name:'Untitled project',single:emptyRow(),list:{rows:[],source:'',defaults:{...defaultSuggestions}},drum:{...defaultDrum},cable:{odMm:29.2,kgKm:1850,minBendRadiusXOd:6},runs:'120, 95, 160, 210, 75, 140',demoGeometry:true});
+export const fresh=():Project=>Project.parse({schemaVersion:2,sheetLayout:8,name:'Untitled project',single:emptyRow(),list:{rows:[],source:'',defaults:{...defaultSuggestions}},drum:{...defaultDrum},cable:{odMm:29.2,kgKm:1850,minBendRadiusXOd:6},runs:'',demoGeometry:true});
 export const project=signal<Project>(fresh());
 export type Tab='single'|'list'|'drums';
 export const tab=signal<Tab>('single');
@@ -30,7 +30,6 @@ export function redo():void {const next=future.pop();if(!next)return;past.push(p
 export type ListFilter='all'|'issues'|'fail'|'incomplete'|'suggested'|'pass';
 // listPanel: the panel tab shown (a From value, '' = rows with no From); null shows every panel.
 export const listPanel=signal<string|null>(null);export const listFilter=signal<ListFilter>('all');export const listSearch=signal('');export const selection=signal<ReadonlySet<number>>(new Set());export const inspecting=signal<number|null>(null);
-export const conflict=signal(false);
 // Clears every sheet and drum setting in one undoable step (Ctrl+Z brings the previous project back until reload).
 export function newProject():void {listPanel.value=null;listFilter.value='all';listSearch.value='';selection.value=new Set();inspecting.value=null;updateProject(fresh());notify('New project started. Undo with Ctrl+Z if you need the previous one back.');}
 // Light is the default look; the choice is a per-viewer convenience kept in this browser only.
@@ -49,9 +48,8 @@ export async function exportExcel(rows:readonly SheetRow[],suffix:string):Promis
 // Names the part of the project that failed validation, so the message points at the right input.
 export function saveProblem(e:unknown):string {const path=e instanceof ZodError?e.issues[0]?.path??[]:[];return path[0]==='drum'||path[0]==='cable'?'check drum inputs':path[0]==='list'||path[0]==='single'?'a sheet cell is too long':path[0]==='name'?'check the project name':path[0]==='runs'?'the typed cable runs are too long':path.length?`check ${path.join(' › ')}`:'browser storage unavailable';}
 export async function initializeStore():Promise<void> {
-  try {const saved=await restoreProject(fresh());if(saved){project.value=saved;saveStatus.value='Saved on this device';}}catch{saveStatus.value='Autosave unavailable';}
-  // Two tabs share one IndexedDB record; warn instead of letting them overwrite each other silently.
-  const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('spool-project'):null,me=Math.random().toString(36).slice(2);let restored=true;
-  if(channel)channel.onmessage=e=>{if((e.data as {from?:string})?.from!==me)conflict.value=true;};
-  let debounce:ReturnType<typeof setTimeout>;effect(()=>{const snapshot=project.value;if(restored){restored=false;return;}saveStatus.value='Saving…';clearTimeout(debounce);debounce=setTimeout(()=>{void autosaveProject(snapshot).then(()=>{saveStatus.value='Saved on this device';channel?.postMessage({from:me});}).catch((e:unknown)=>saveStatus.value=`Not saved: ${saveProblem(e)}`);},450);});
+  forgetDeviceCopy();
+  try {const saved=await restoreProject();if(saved){project.value=saved;saveStatus.value='Saved in this tab';}}catch{saveStatus.value='Autosave unavailable';}
+  let restored=true;
+  let debounce:ReturnType<typeof setTimeout>;effect(()=>{const snapshot=project.value;if(restored){restored=false;return;}saveStatus.value='Saving…';clearTimeout(debounce);debounce=setTimeout(()=>{void autosaveProject(snapshot).then(()=>{saveStatus.value='Saved in this tab';}).catch((e:unknown)=>saveStatus.value=`Not saved: ${saveProblem(e)}`);},450);});
 }

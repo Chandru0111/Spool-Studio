@@ -1,13 +1,10 @@
-import { get,set } from 'idb-keyval';
 import { Project } from './schema';
-// Version 1 projects held the retired circuit and catalogue model; only their drum settings carry over.
-export async function restoreProject(fresh:Project):Promise<Project|null> {
- const raw=await get('spool-project-v2');if(raw)return Project.parse(raw);
- const old=await get('spool-project-v1') as Partial<Project>|undefined;if(!old)return null;
- const keep=Project.safeParse({...fresh,name:old.name??fresh.name,drum:old.drum,cable:old.cable,runs:old.runs,demoGeometry:old.demoGeometry,drumOptions:old.drumOptions??[],selectedDrumId:old.selectedDrumId??fresh.selectedDrumId});
- return keep.success?keep.data:null;
-}
-export async function autosaveProject(p:Project):Promise<void> {await set('spool-project-v2',Project.parse(p));}
+// Work is kept in this tab only (sessionStorage): it survives a reload, and a new tab or browser starts blank.
+const KEY='spool-project';
+export async function restoreProject():Promise<Project|null> {const raw=sessionStorage.getItem(KEY);return raw?Project.parse(JSON.parse(raw)):null;}
+export async function autosaveProject(p:Project):Promise<void> {sessionStorage.setItem(KEY,JSON.stringify(Project.parse(p)));}
+// Earlier versions kept the project on the device (IndexedDB); delete that copy so nothing lingers.
+export function forgetDeviceCopy():void {try{indexedDB.deleteDatabase('keyval-store');}catch{/* storage unavailable */}}
 export function downloadFile(name:string,data:BlobPart,type='application/json'):void {const url=URL.createObjectURL(new Blob([data],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 
 export function saveProject(p:Project):void {downloadFile('spool-project.spool.json',JSON.stringify(Project.parse(p),null,2));}
