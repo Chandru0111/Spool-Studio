@@ -2,20 +2,23 @@ import {clip} from '../engine/sheet';
 import {emptyEntry,num,type CatalogueKey} from '../engine/loads';
 import {asFraction,dot,verify,type Box,type Proposal} from './equipment';
 import {fieldsIn,type Field} from './vocabulary';
-import type {PositionedLine} from './parse';
+import type {PositionedLine,Rule} from './parse';
 
 // Catalogue rating tables: one row per motor, pump or fan, with headings stacked over a few lines above the rows
 // ("Output / kW", "Current / In at 400 V / A", "Efficiency % / 100% 75%"). Columns are found from where the numbers
 // sit on the page, so a heading that spans sub-columns or wraps onto two lines still lands on the right column. Each
 // column is named from the words, symbols and units over it in any language the vocabulary knows (vocabulary.ts),
 // checked against its values, and, where no heading names it, found from P = √3·U·I·η·cosφ holding on every row.
-// Every value keeps the box it was printed in, so the review can show it on the page.
+// Where the page draws the table's borders or shades its cells, those edges decide which column a heading or value sits
+// in. Every value keeps the box it was printed in, so the review can show it on the page.
 type Cell={x0:number;x1:number;y:number;h:number;text:string};
 type Kind='name'|'code'|'frame'|'kw'|'w'|'hp'|'in'|'un'|'eff'|'pf'|'poles'|'speed';
 // head: every heading line over the column, top to bottom; own: only the words printed over this column alone.
 // skip: its own heading says it is not load data (starting current, torque, weight…).
 type Column={x0:number;x1:number;head:string[];own:string[];text:number;numbers:number;kind?:Kind|undefined;skip?:boolean};
 const NUM=/^[-+]?\d+(?:[.,]\d+)?%?$/;
+// A load point printed under an efficiency or power-factor heading: "100", "75 %", "4/4", "3/4".
+const LOAD_POINT=/^\s*(?:\d{2,3}\s*%?|[1-4]\s*\/\s*4)\s*$/;
 const HP_KW=0.7457;
 // Supply voltages motors are rated for, to recognise kW, In, efficiency and power factor columns by their values alone.
 const VOLTAGES=[110,115,120,200,208,220,230,240,380,400,415,440,460,480,500,525,550,575,600,660,690,1000,2300,3000,3300,4160,6000,6600,10000,11000,13800];
@@ -70,7 +73,7 @@ function classify(c:Column):Kind|'skip'|undefined {
 // Several columns of one kind (efficiency at 100/75/50 %, current at 380/400/415 V): take full load and 400 V, else the first.
 function pick(cols:readonly Column[],kind:Kind):Column|undefined {
  const of=cols.filter(c=>c.kind===kind),head=(c:Column)=>c.head.join(' ');
- const want=kind==='in'?[/(?<!\d)400(?!\d)/,/(?<!\d)415(?!\d)/,/(?<!\d)380(?!\d)/]:kind==='eff'||kind==='pf'?[/100\s*%|4\s*\/\s*4|full|voll|plein|plena|pieno|pleno/i]:[];
+ const want=kind==='in'?[/(?<!\d)400(?!\d)/,/(?<!\d)415(?!\d)/,/(?<!\d)380(?!\d)/]:kind==='eff'||kind==='pf'?[/100\s*%|(?<![\d.,])100\s*$|4\s*\/\s*4|full|voll|plein|plena|pieno|pleno/i]:[];
  for(const re of want){const hit=of.find(c=>re.test(head(c)));if(hit)return hit;}
  return of[0];
 }
@@ -80,11 +83,16 @@ function voltsIn(s:string):string|undefined {
  return m?.[1]?.replace(/\s/g,'')??(m?.[2]?String(Math.round(Number(dot(m[2]))*1000)):undefined);
 }
 const overlap=(c:{x0:number;x1:number},x0:number,x1:number)=>Math.min(c.x1,x1)-Math.max(c.x0,x0);
-function columnOf(cols:readonly Column[],cell:{x0:number;x1:number}):Column|undefined {
+// apart: a drawn border runs between the cell and the column, so the cell belongs to another column if one is on its side.
+function columnOf(cols:readonly Column[],cell:{x0:number;x1:number},apart?:(c:Column)=>boolean):Column|undefined {
+ const near=apart?cols.filter(c=>!apart(c)):[];
  let best:Column|undefined,score=-12;// a cell up to 12 pt beside a column still belongs to it
- for(const c of cols){const o=overlap(c,cell.x0,cell.x1);if(o>score){score=o;best=c;}}
+ for(const c of near.length?near:cols){const o=overlap(c,cell.x0,cell.x1);if(o>score){score=o;best=c;}}
  return best;
 }
+// The vertical edges a page draws: border lines and both sides of each shaded or framed cell, with the height they run over.
+type Edge={x:number;y0:number;y1:number};
+const edgesOf=(rules:readonly Rule[]):Edge[]=>rules.flatMap(r=>r.y1-r.y0<4?[]:r.x1-r.x0<3?[{x:(r.x0+r.x1)/2,y0:r.y0,y1:r.y1}]:[{x:r.x0,y0:r.y0,y1:r.y1},{x:r.x1,y0:r.y0,y1:r.y1}]);
 const polesFrom=(rpm:number)=>rpm>=2000?2:rpm>=1250?4:rpm>=850?6:rpm>=600?8:null;
 const SYNC:Record<string,number>={3000:2,3600:2,1500:4,1800:4,1000:6,1200:6,750:8,900:8};
 function polesIn(text:string):number|null {
@@ -97,9 +105,10 @@ const NOT_NAME=/^(?:IEC|IE\d?|IP\d+|IC\d+|IM\w*|NEMA|TEFC|TENV|ODP|ATEX|EX|CE|UL
 // sizes or codes: the code-like words (capitals with digits or a hyphen, or a short capital word) on the nearest short
 // line above that starts at the table's left edge, leaving out ratings, poles, standards and field names. The name is
 // taken as printed, from its first such word to its last ("OMT1C IE3 RW 8-POLE" gives "OMT1C IE3 RW").
-function titleName(around:readonly Cell[][],left:number):{text:string;box:Cell}|undefined {
+function titleName(around:readonly Cell[][],left:number,right:number):{text:string;box:Cell}|undefined {
  for(const l of around){
-  if(!l.length||l.length>3||l[0]!.x0>left+30||isProse(l))continue;
+  // A title is a few pieces at the left (a heading row spreads across the table); marks out at the right edge do not count.
+  if(!l.length||l.filter(c=>c.x0<left+(right-left)*0.7).length>3||l[0]!.x0>left+30||isProse(l))continue;
   for(const cell of l){
    const words=cell.text.split(/[\s|,;:&()]+/).filter(w=>/^[A-Z0-9][A-Z0-9.\-/]*$/.test(w)&&/[A-Z]/.test(w)&&w.length>=2&&w.length<=20&&
     (/\d/.test(w)||w.replace(/[^A-Z]/g,'').length<=5)&&!/^\d+(?:[.,]\d+)?[A-Z%]{0,3}$/.test(w)&&!/\d\s*-?\s*POL/.test(w)&&!NOT_NAME.test(w)&&!fieldsIn(w).size);
@@ -111,10 +120,16 @@ function titleName(around:readonly Cell[][],left:number):{text:string;box:Cell}|
  return undefined;
 }
 
-export function catalogueFromTables(layout:ReadonlyMap<number,readonly PositionedLine[]>,file:string):Proposal[] {
+export function catalogueFromTables(layout:ReadonlyMap<number,readonly PositionedLine[]>,file:string,rules:ReadonlyMap<number,readonly Rule[]>=new Map()):Proposal[] {
  const out:Proposal[]=[],seen=new Set<string>();
  for(const [page,lines] of layout){
   const cells=lines.map(cellsOf);let i=0;
+  // The borders drawn across a text line (at the middle of its letters), and whether one runs between two points on it.
+  const edges=edgesOf(rules.get(page)??[]),drawn=new Map<number,number[]>();
+  const walls=(cell:Cell)=>{const y=Math.round(cell.y+cell.h*0.3);let w=drawn.get(y);
+   if(!w){w=[...new Set(edges.filter(e=>e.y0-1<=y&&y<=e.y1+1).map(e=>Math.round(e.x*2)/2))].sort((a,b)=>a-b);drawn.set(y,w);}return w;};
+  const centre=(c:{x0:number;x1:number})=>(c.x0+c.x1)/2;
+  const apart=(cell:Cell,c:{x0:number;x1:number})=>{const a=Math.min(centre(c),centre(cell)),b=Math.max(centre(c),centre(cell));return walls(cell).some(x=>x>a+0.5&&x<b-0.5);};
   while(i<lines.length){
    if(!isData(cells[i]!)){i++;continue;}
    // A block of rows; a line or two between rows ("4 poles – 1500 rpm") is a sub-heading for the rows below it.
@@ -128,7 +143,7 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    const cols:Column[]=[];
    // text counts cells with letters (names, codes); "–" or "6,3 / 12,5" are neither names nor single numbers.
    const add=(cell:Cell)=>{
-    const numeric=NUM.test(cell.text),text=!numeric&&/\p{L}/u.test(cell.text),hit=cols.find(c=>overlap(c,cell.x0,cell.x1)>0);
+    const numeric=NUM.test(cell.text),text=!numeric&&/\p{L}/u.test(cell.text),hit=cols.find(c=>overlap(c,cell.x0,cell.x1)>0&&!apart(cell,c));
     if(hit){hit.x0=Math.min(hit.x0,cell.x0);hit.x1=Math.max(hit.x1,cell.x1);if(numeric)hit.numbers++;if(text)hit.text++;}
     else cols.push({x0:cell.x0,x1:cell.x1,head:[],own:[],text:text?1:0,numbers:numeric?1:0});
    };
@@ -146,15 +161,27 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
     around.push(c);
    }
    const context=around.map(c=>c.map(x=>x.text).join(' '));
+   // A heading printed in a drawn cell heads only columns inside that cell, so words wider than their column do not spill
+   // across a border. Borders count only where they divide the table (a shaded band behind the whole heading row does
+   // not) and the words do not cross one. A heading alone in a cell with one column heads it even when printed far from
+   // its figures; a group cell ("Current" over In, Is/In, I0) still lets its sub-headings pick their column by position.
+   const left=Math.min(...cols.map(c=>c.x0)),right=Math.max(...cols.map(c=>c.x1));
+   const cellOver=(item:Cell)=>{
+    const w=walls(item);if(!w.some(x=>x>left+1&&x<right-1)||w.some(x=>x>item.x0+1&&x<item.x1-1))return undefined;
+    const l=w.filter(x=>x<=item.x0+1).at(-1),r=w.find(x=>x>=item.x1-1);if(l===undefined||r===undefined)return undefined;
+    return (c:Column)=>centre(c)>l&&centre(c)<r;
+   };
    for(const l of heads){
     const got=new Map<Column,string[]>(),own=new Map<Column,string[]>();
     for(const item of l){
-     const under=cols.filter(c=>overlap(c,item.x0-2,item.x1+2)>0),to=under.length?under:[columnOf(cols,item)].filter(c=>c!==undefined);
+     const near=cols.filter(c=>overlap(c,item.x0-2,item.x1+2)>0),inCell=cellOver(item),lone=inCell&&cols.filter(inCell);
+     const under=!inCell?near:near.some(inCell)?near.filter(inCell):lone&&lone.length===1?lone:[],to=under.length?under:[columnOf(cols,item,c=>apart(item,c))].filter(c=>c!==undefined);
      for(const c of to){got.set(c,[...got.get(c)??[],item.text]);if(to.length===1)own.set(c,[...own.get(c)??[],item.text]);}
     }
     for(const [c,t] of got)c.head.push(t.join(' '));for(const [c,t] of own)c.own.push(t.join(' '));
    }
-   const textOf=(r:{cells:Cell[]},c:Column)=>r.cells.filter(x=>columnOf(cols,x)===c).map(x=>x.text).join(' ').trim();
+   const colOf=(x:Cell)=>columnOf(cols,x,c=>apart(x,c));
+   const textOf=(r:{cells:Cell[]},c:Column)=>r.cells.filter(x=>colOf(x)===c).map(x=>x.text).join(' ').trim();
    const numsOf=(c:Column)=>rows.map(r=>num(dot(textOf(r,c)).replace(/%$/,''))).filter((n):n is number=>n!==null);
    for(const c of cols){const k=classify(c);c.kind=k==='skip'?undefined:k;c.skip=k==='skip';}
    // Values must fit the field the heading gave: a power factor or efficiency is at most 1 (or 100 %), a speed is in the
@@ -166,6 +193,14 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
     if((c.kind==='pf'||c.kind==='eff')&&max>100||c.kind==='speed'&&min<100||c.kind==='poles'&&!v.every(n=>n>=2&&n<=16&&n%2===0))c.kind=undefined;
     if(!c.kind&&!c.skip&&rows.length>=2&&v.length===rows.length&&v.every(n=>SYNC_RPM.some(s=>n<=s&&n>=s*0.9)))c.kind='speed';
    }
+   // Efficiency or power factor at several loads (100 %, 75 %, 50 % or 4/4, 3/4, 2/4): the heading is often centred
+   // over the middle load only, so a load-point column no heading names takes its neighbour's field.
+   const loadPoint=(c:Column|undefined)=>!!c&&c.own.some(t=>LOAD_POINT.test(t));
+   for(let pass=0;pass<2;pass++)cols.forEach((c,j)=>{
+    if(c.kind||c.skip||!loadPoint(c))return;
+    const n=[cols[j-1],cols[j+1]].find(o=>(o?.kind==='eff'||o?.kind==='pf')&&loadPoint(o));
+    if(n){c.kind=n.kind;c.head=[...n.head.filter(t=>!LOAD_POINT.test(t)),...c.own];}
+   });
    // kW, In, efficiency and power factor that no heading names (a wording or language not in the vocabulary): the free
    // numeric columns whose values work out, by P = √3·U·I·η·cosφ, to one standard supply voltage on every row.
    const need=(['kw','in','eff','pf'] as const).filter(k=>!pick(cols,k)&&!(k==='kw'&&(pick(cols,'w')||pick(cols,'hp'))));
@@ -191,14 +226,15 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    // ID, article number, frame size) is the configuration. A name column printing the same text on every row ("OMT2"
    // beside "80K2", "90S2"…) is the series name. With no name column, the product name printed over the table is the
    // model; with neither, the code is.
-   const distinct=(c:Column)=>new Set(rows.map(r=>textOf(r,c)).filter(Boolean)).size;
+   // Punctuation aside: a scan's stray mark ("OMT2 :") does not make a series name vary.
+   const distinct=(c:Column)=>new Set(rows.map(r=>textOf(r,c).replace(/[^\p{L}\p{N}]/gu,'')).filter(Boolean)).size;
    const texts=cols.filter(c=>c.text>c.numbers&&!c.kind&&!c.skip&&c.text*2>=rows.length);
    // An unlabelled text column names the rows only when no labelled one does (an efficiency-class column of "IE3" is not a name).
    const labelled=cols.filter(c=>c.kind==='name'||c.kind==='code'||c.kind==='frame'),ids=labelled.length||texts.length!==1?labelled:texts;
    const varies=ids.some(c=>distinct(c)>1);
    const names=ids.filter(c=>c.kind!=='code'&&c.kind!=='frame'||varies&&rows.length>1&&distinct(c)===1&&c.text>c.numbers);
    const nameCol=names.find(c=>distinct(c)>1)??names[0],codes=ids.filter(c=>!names.includes(c));
-   const title=nameCol?undefined:titleName(around,Math.min(...cols.map(c=>c.x0)));
+   const title=nameCol?undefined:titleName(around,left,right);
    const modelCol=nameCol??(title?undefined:codes[0]);
    const configCols=ids.filter(c=>c!==modelCol).sort((a,b)=>a.x0-b.x0);
    const poles=pick(cols,'poles'),speed=pick(cols,'speed');
@@ -210,7 +246,7 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    // A row's printed values, each kept only in a plausible range (kW from W or hp).
    const read=(r:{cells:Cell[]})=>{
     const at=new Map<Column,Cell[]>();
-    for(const c of r.cells){const col=columnOf(cols,c);if(col)at.set(col,[...at.get(col)??[],c]);}
+    for(const c of r.cells){const col=colOf(c);if(col)at.set(col,[...at.get(col)??[],c]);}
     const raw=(c?:Column)=>c?(at.get(c)??[]).map(x=>x.text).join(' ').trim():'',val=(c?:Column)=>dot(raw(c)).replace(/%$/,''),n=(c?:Column)=>num(val(c));
     const kwN=n(kw)===null?null:watts?+(n(kw)!/1000).toFixed(4):n(kw),hpN=n(hp),k=kwN??(hpN===null?null:+(hpN*HP_KW).toFixed(3));
     const amps=n(inA),ef=num(asFraction(val(eff))),p=num(asFraction(val(pf)));

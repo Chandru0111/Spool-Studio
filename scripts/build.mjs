@@ -13,9 +13,10 @@ const collect=async(from,to)=>{const info=await fs.lstat(from);if(info.isDirecto
 await collect('node_modules/pdfjs-dist/build/pdf.min.mjs','vendor/pdf.mjs');
 await collect('node_modules/pdfjs-dist/build/pdf.worker.min.mjs','vendor/pdf.worker.mjs');
 for(const [source,target] of [['wasm','pdf-wasm'],['cmaps','pdf-cmaps'],['standard_fonts','pdf-fonts']])await collect(`node_modules/pdfjs-dist/${source}`,`vendor/${target}`);
-await collect('node_modules/tesseract.js/dist/worker.min.js','vendor/ocr/worker.min.js');
-for(const f of await fs.readdir('node_modules/tesseract.js-core'))if(f.endsWith('.wasm.js')||f.endsWith('.wasm'))await collect(`node_modules/tesseract.js-core/${f}`,`vendor/ocr/${f}`);
-await collect('node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz','vendor/ocr/eng.traineddata.gz');
+// OCR: ONNX Runtime's WebAssembly build and the PaddleOCR models (models/paddleocr/README.md).
+for(const f of ['ort.wasm.min.mjs','ort-wasm-simd-threaded.mjs','ort-wasm-simd-threaded.wasm'])await collect(`node_modules/onnxruntime-web/dist/${f}`,`vendor/ocr/${f}`);
+await collect('models/paddleocr/det/inference.onnx','vendor/ocr/det.onnx');
+for(const m of ['latin','cyrillic','chinese']){await collect(`models/paddleocr/${m}/inference.onnx`,`vendor/ocr/${m}.onnx`);await collect(`models/paddleocr/${m}/inference.yml`,`vendor/ocr/${m}.yml`);}
 for(const face of ['sans','mono'])for(const weight of [400,500,600])await collect(`node_modules/@fontsource/ibm-plex-${face}/files/ibm-plex-${face}-latin-${weight}-normal.woff2`,`fonts/plex-${face}-${weight}.woff2`);
 await checkOutputTree(out,assets.keys());
 for(const [to,from] of [...publicFiles.map(file=>[file,path.join('public',file)]),...assets]){
@@ -32,8 +33,8 @@ if(process.argv.includes('--serve')){
  watchKnowledge();
  const ctx=await esbuild.context(options);await ctx.watch();
  const served=new Set([...publicFiles,...assets.keys(),'main.js','main.css','CHECKSUMS.txt']);
- const mime={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.wasm':'application/wasm','.pdf':'application/pdf','.woff2':'font/woff2','.gz':'application/gzip','.svg':'image/svg+xml'};
- const server=http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localhost');const requested=decodeURIComponent(url.pathname);const full=path.resolve(out,'.'+(requested==='/'?'/index.html':requested));if(!served.has(path.relative(out,full))||await fs.realpath(full)!==path.join(await fs.realpath(out),path.relative(out,full))){res.writeHead(404);res.end();return;}const data=await fs.readFile(full);res.writeHead(200,{'Content-Type':mime[path.extname(full)]??'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Security-Policy':"frame-ancestors 'none'",'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Resource-Policy':'same-origin','Permissions-Policy':'camera=(), microphone=(), geolocation=(), payment=(), usb=()'});res.end(data);}catch{res.writeHead(404);res.end('Not found');}});
+ const mime={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.wasm':'application/wasm','.pdf':'application/pdf','.woff2':'font/woff2','.gz':'application/gzip','.onnx':'application/octet-stream','.yml':'text/plain','.svg':'image/svg+xml'};
+ const server=http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localhost');const requested=decodeURIComponent(url.pathname);const full=path.resolve(out,'.'+(requested==='/'?'/index.html':requested));if(!served.has(path.relative(out,full))||await fs.realpath(full)!==path.join(await fs.realpath(out),path.relative(out,full))){res.writeHead(404);res.end();return;}const data=await fs.readFile(full);res.writeHead(200,{'Content-Type':mime[path.extname(full)]??'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Security-Policy':"frame-ancestors 'none'",'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Permissions-Policy':'camera=(), microphone=(), geolocation=(), payment=(), usb=()'});res.end(data);}catch{res.writeHead(404);res.end('Not found');}});
  server.listen(5173,'127.0.0.1',()=>console.log('Spool Studio running at http://127.0.0.1:5173'));
 }
 

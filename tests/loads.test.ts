@@ -9,7 +9,8 @@ import {fresh} from '../src/ui/state';
 import {loadsBook} from '../src/export/equipment';
 import {catalogueFromDatasheet,catalogueFromWeb,pageText,redirectTarget} from '../src/import/webpage';
 import {catalogueFromTables} from '../src/import/rating-table';
-import {ocrLines} from '../src/import/parse';
+import {ocrLines,rulesOf} from '../src/import/parse';
+import {charList,ctcDecode,inkParts,shareOut,textBoxes} from '../src/import/ocr';
 import {equipmentLayout,writeEquipmentRows,writeEquipmentSummary} from '../src/export/equipment-layout';
 
 // Made-up equipment and brands only.
@@ -289,6 +290,31 @@ describe('reading catalogue rating tables by column position',()=>{
   expect(rows.map(r=>[r.entry.model,r.entry.ratedKw,r.entry.inA,r.entry.efficiency,r.entry.pf])).toEqual([
    ['ZQ 90','1.5','3.3','0.828','0.8'],['ZQ 100','2.2','4.7','0.843','0.8'],['ZQ 112','4','8.1','0.866','0.82']]);
  });
+ // A ruled grid: headings at the left of each cell and figures at the right, so "In" sits nearer the kW figures than its own.
+ const grid=[line([42,'Type',20],[92,'kW',10],[132,'In',8],[172,'η %',12],[212,'cos φ',20]),
+  ...[['ZQ 90','1.5','3.3','82.8','0.80'],['ZQ 100','2.2','4.7','84.3','0.80'],['ZQ 112','4','8.1','86.6','0.82']].map(([t,p,i,e,f])=>
+   line([42,t!,25],[128-p!.length*5,p!],[168-i!.length*5,i!],[208-e!.length*5,e!],[248-f!.length*5,f!]))];
+ const borders=[40,90,130,170,210,250].map(x=>({x0:x-0.25,y0:-20,x1:x+0.25,y1:20}));
+ it('reads borders and shaded cells from the PDF drawing, in page points',()=>{
+  const OPS={save:10,restore:11,transform:12,endPath:28,paintFormXObjectBegin:74,paintFormXObjectEnd:75,beginGroup:76,endGroup:77,constructPath:91},fill=22;
+  const path=(...p:number[])=>[OPS.constructPath,[fill,[new Float32Array(p)],null]] as const;
+  const ops=[[OPS.save,null],[OPS.transform,[2,0,0,2,10,20]],path(0,0,0, 1,10,0, 1,10,5, 1,0,5, 3),path(0,0,0, 2,1,1,2,2,3,3),[OPS.restore,null],
+   path(0,50,0, 1,50,100),[OPS.constructPath,[OPS.endPath,[new Float32Array([0,0,0,1,600,0,1,600,800,1,0,800,3])],null]]] as const;
+  expect(rulesOf(ops.map(o=>o[0]),ops.map(o=>o[1]),OPS)).toEqual([{x0:10,y0:20,x1:30,y1:30},{x0:50,y0:0,x1:50,y1:100}]);
+ });
+ it('gives each heading the column inside its drawn cell',()=>{
+  const read=(rules?:Map<number,typeof borders>)=>catalogueFromTables(new Map([[1,grid]]),'grid.pdf',rules).map(r=>[r.entry.model,r.entry.ratedKw,r.entry.inA,r.entry.efficiency,r.entry.pf]);
+  const want=[['ZQ 90','1.5','3.3','0.828','0.8'],['ZQ 100','2.2','4.7','0.843','0.8'],['ZQ 112','4','8.1','0.866','0.82']];
+  expect(read(new Map([[1,borders]]))).toEqual(want);
+  expect(read()).not.toEqual(want);
+ });
+ it('takes efficiency at full load when the heading sits over the 75 % column only',()=>{
+  const rows=catalogueFromTables(new Map([[2,[line([40,'Type',20],[100,'kW',10],[160,'In (A)',25],[258,'η %',15],[340,'cos φ',20]),
+   line([220,'100 %',20],[260,'75 %',15],[300,'50 %',15]),
+   ...[['ZQ 90','1.5','3.3','82.8','83.0','81.0','0.80'],['ZQ 100','2.2','4.7','84.3','84.5','82.6','0.80'],['ZQ 112','4','8.1','86.6','86.9','85.1','0.82']].map(([t,p,i,a,b,c,f])=>
+    line([40,t!],[100,p!],[160,i!],[220,a!],[260,b!],[300,c!],[340,f!]))]]]),'eff.pdf');
+  expect(rows.map(r=>[r.entry.efficiency,r.entry.pf])).toEqual([['0.828','0.8'],['0.843','0.8'],['0.866','0.82']]);
+ });
  it('reads a scanned table from OCR word boxes',()=>{
   // Word boxes as OCR gives them: pixels from the top left of a page drawn at 2 pixels per point.
   const word=(text:string,x:number,y:number)=>({text,bbox:{x0:x,y0:y,x1:x+text.length*12,y1:y+20}});
@@ -324,5 +350,34 @@ describe('reading datasheets',()=>{
   // Trailing zeros on the page are the same number; a longer number is not.
   expect(verify({...emptyEntry(),pf:'0.8',inA:'13.5',efficiency:'0.9'},'cos φ 0.80, In 13.50 A, η 90.0 %')).toEqual([]);
   expect(verify({...emptyEntry(),inA:'1.5'},'In 1.55 A')).toEqual(['inA']);
+ });
+});
+
+describe('scanned-page OCR helpers',()=>{
+ it('reads the character list from a model settings file',()=>{
+  expect(charList("PostProcess:\n  name: CTCLabelDecode\n  character_dict:\n  - '0'\n  - a\n  - ''''\n  - \"\\u00e9\"\nNext: 1\n")).toEqual(['0','a',"'",'é']);
+ });
+ it('decodes CTC output: repeats merge, a blank separates a repeated letter',()=>{
+  const p=(c:number)=>[0,1,2].map(k=>k===c?0.9:0.05);
+  expect(ctcDecode([...p(1),...p(1),...p(0),...p(1),...p(2)],5,3,['','a','b'])).toEqual({text:'aab',score:expect.closeTo(0.9,5)});
+ });
+ it('finds text regions in the probability map and grows them by the unclip margin',()=>{
+  const w=20,h=10,map=new Float32Array(w*h);
+  for(let y=3;y<=6;y++){for(let x=2;x<=9;x++)map[y*w+x]=0.9;for(let x=13;x<=17;x++)map[y*w+x]=0.9;}
+  const boxes=textBoxes(map,w,h);
+  expect(boxes).toHaveLength(2);
+  expect(boxes[0]!.x0).toBeLessThan(2);expect(boxes[0]!.x1).toBeGreaterThan(10);expect(boxes[0]!.score).toBeCloseTo(0.9);
+ });
+ it('cuts a detected line into its printed parts, ignoring grid lines',()=>{
+  // White page, letters 10 px tall at x 5–20 and 30–40, a vertical grid line at x 60, letters at 65–80, a rule at y 18.
+  const width=100,height=20,data=new Uint8ClampedArray(width*height*4).fill(255),ink=(x:number,y:number)=>data.fill(0,(y*width+x)*4,(y*width+x)*4+3);
+  for(let y=5;y<15;y++)for(const [a,b] of [[5,20],[30,40],[65,80]])for(let x=a!;x<=b!;x++)ink(x,y);
+  for(let y=0;y<height;y++)ink(60,y);for(let x=0;x<width;x++)ink(x,18);
+  expect(inkParts({data,width,height},{x0:0,y0:0,x1:width,y1:height}).map(p=>[p.x0,p.x1,p.y0,p.y1])).toEqual([[5,21,5,15],[30,41,5,15],[65,81,5,15]]);
+ });
+ it('shares a line\'s words out over its parts by length',()=>{
+  expect(shareOut('Frame Size Rated Power',[50,55])).toEqual(['Frame Size','Rated Power']);
+  expect(shareOut('QX7 90L4',[20,22])).toEqual(['QX7','90L4']);
+  expect(shareOut('abc',[10,10])).toBeUndefined();
  });
 });

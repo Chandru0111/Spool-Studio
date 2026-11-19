@@ -2,7 +2,7 @@ import {clip} from '../engine/sheet';
 import {emptyEntry,type CatalogueKey,type CatalogueRow} from '../engine/loads';
 import type {PageEvidence} from '../store/schema';
 import {asFraction,catalogueFromPages,dot,verify,type Proposal} from './equipment';
-import type {PositionedLine} from './parse';
+import type {PositionedLine,Rule} from './parse';
 import {catalogueFromTables} from './rating-table';
 
 // Vendor product pages. A browser will not let one website read another, and vendors block bots, so the page comes in through
@@ -179,7 +179,7 @@ const cellsOf=(line:string)=>line.trim().replace(/([A-Za-z])\s+(ffi|ffl|ff|fi|fl
 // (catalogueFromTables, by column position). One-product sheets are "label    value" rows (Siemens, ABB, WEG): the PDF text keeps
 // two or more spaces between columns, so those become cells and the whole file is read as one product. Prose sheets go through
 // catalogueFromPages; the fuller of those two wins.
-export function catalogueFromDatasheet(pages:readonly PageEvidence[],file:string,layout:ReadonlyMap<number,readonly PositionedLine[]>=new Map()):{proposals:Proposal[];brand:string} {
+export function catalogueFromDatasheet(pages:readonly PageEvidence[],file:string,layout:ReadonlyMap<number,readonly PositionedLine[]>=new Map(),rules:ReadonlyMap<number,readonly Rule[]>=new Map()):{proposals:Proposal[];brand:string} {
  const none={proposals:[] as Proposal[],brand:''},attempt=<T,>(read:()=>T,fallback:T)=>{try{return read();}catch{return fallback;}};
  // The one-product readers only need the start of a long catalogue (for its brand); their entry limits are not the catalogue's.
  const text=pages.map(p=>p.text.split('\n').map(l=>cellsOf(l).join('\t')).join('\n')).join('\n').slice(0,MAX_PAGE);
@@ -193,6 +193,6 @@ export function catalogueFromDatasheet(pages:readonly PageEvidence[],file:string
  const single=!one?{proposals:[] as Proposal[],brand:specs.brand}:filled(specs.proposals)>=filled(prose)?specs:{proposals:prose,brand:specs.brand};
  // A table whose rows carry their own model numbers is a catalogue. Rows named only by rating ("5.5 kW") may be load points
  // in a one-product sheet, so they win only when that sheet names no model.
- const rows=catalogueFromTables(layout,file),named=rows.some(r=>!r.unverified.includes('model'));
+ const rows=catalogueFromTables(layout,file,rules),named=rows.some(r=>!r.unverified.includes('model'));
  return rows.length>=2&&(named||!single.proposals.some(p=>p.entry.model))?{proposals:rows,brand:specs.brand}:single;
 }

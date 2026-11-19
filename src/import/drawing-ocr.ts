@@ -1,20 +1,23 @@
-import {inkMask,lineMask,findLines,stemHeight,ocrImage,findBoxes,eraseOutlines,rotate,fromRotated,overlap,clearBoxes,traceFeeders,toGray,type Rgba,type Box,type Geometry} from './raster';
+import {lineMask,findLines,rotate,fromRotated,overlap,clearBoxes,traceFeeders,toGray,type Rgba,type Box,type Geometry} from './raster';
 import type {Token} from './schematic';
 
-// Reads a drawing image (scan, screenshot, or a PDF page without a text layer): cleans it to black text on white with
-// long lines erased, reads words in three orientations (labels along vertical drops are common), then traces busbars and
-// feeders on the line work with the words masked out. The OCR engine is passed in, so tests can run it in Node.
+// Reads a drawing image (scan, screenshot, or a PDF page without a text layer): reads words in three orientations (labels
+// along vertical drops are common) on the page as drawn, since PaddleOCR finds text among line work and erasing lines
+// would cut letters (B, D and R look like boxes), then traces busbars and feeders on the line work with the words masked out. The OCR engine is passed in, so tests can run it in Node.
 export type Word={text:string;confidence:number;bbox:Box};
 export type Recognise=(img:Rgba,label:string)=>Promise<Word[]>;
 export type DrawingRead={tokens:Token[];geometry:Geometry;textHeight:number;lines:string[]};
 const TILE=3000,OVERLAP=160;
 const crop=(img:Rgba,x:number,y:number,w:number,h:number):Rgba=>{const data=new Uint8ClampedArray(w*h*4);for(let r=0;r<h;r++)data.set(img.data.subarray(((y+r)*img.width+x)*4,((y+r)*img.width+x+w)*4),r*w*4);return {width:w,height:h,data};};
-// Large sheets are read in overlapping tiles so small text is not lost to downscaling.
+// Large sheets are read in overlapping tiles so small text is not lost to downscaling. Each word is kept from the tile
+// that owns its centre (tiles meet halfway across their overlap), so a word clipped at a tile edge is not read twice.
 async function tiled(img:Rgba,label:string,recognise:Recognise,check:()=>void):Promise<Word[]> {
  if(img.width<=TILE&&img.height<=TILE)return recognise(img,label);
  const out:Word[]=[],step=TILE-OVERLAP,xs=Math.ceil((img.width-OVERLAP)/step),ys=Math.ceil((img.height-OVERLAP)/step);
- for(let ty=0;ty<ys;ty++)for(let tx=0;tx<xs;tx++){check();const x=Math.min(tx*step,Math.max(0,img.width-TILE)),y=Math.min(ty*step,Math.max(0,img.height-TILE)),w=Math.min(TILE,img.width-x),h=Math.min(TILE,img.height-y);
-  for(const word of await recognise(crop(img,x,y,w,h),`${label}, part ${ty*xs+tx+1} of ${xs*ys}`))out.push({...word,bbox:{x0:word.bbox.x0+x,y0:word.bbox.y0+y,x1:word.bbox.x1+x,y1:word.bbox.y1+y}});}
+ const at=(t:number,size:number)=>Math.min(t*step,Math.max(0,size-TILE)),from=(t:number,size:number)=>t?(at(t,size)+at(t-1,size)+TILE)/2:-Infinity,to=(t:number,n:number,size:number)=>t<n-1?from(t+1,size):Infinity;
+ for(let ty=0;ty<ys;ty++)for(let tx=0;tx<xs;tx++){check();const x=at(tx,img.width),y=at(ty,img.height),w=Math.min(TILE,img.width-x),h=Math.min(TILE,img.height-y);
+  for(const word of await recognise(crop(img,x,y,w,h),`${label}, part ${ty*xs+tx+1} of ${xs*ys}`)){const b={x0:word.bbox.x0+x,y0:word.bbox.y0+y,x1:word.bbox.x1+x,y1:word.bbox.y1+y},cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2;
+   if(cx>=from(tx,img.width)&&cx<to(tx,xs,img.width)&&cy>=from(ty,img.height)&&cy<to(ty,ys,img.height))out.push({...word,bbox:b});}}
  return out;
 }
 // OCR noise from symbols ("Ql", "<a", "=20"): short words count only when they are known drawing abbreviations,
@@ -31,19 +34,17 @@ export function useful(text:string,confidence:number):boolean {
 }
 const score=(w:{text:string;confidence:number})=>w.confidence*Math.min(w.text.replace(/[^A-Za-z0-9]/g,'').length,6);
 export async function readDrawingImage(img:Rgba,page:number,recognise:Recognise,progress:(m:string)=>void,check:()=>void):Promise<DrawingRead> {
- // Lines are erased only when much longer than a letter stem, so large or high-resolution text survives.
- const gray=toGray(img),mask=inkMask(img,gray),stem=stemHeight(mask),long=findLines(mask,Math.max(40,Math.round(stem*2.5))),clean=ocrImage(img,mask,long);
- const est=Math.max(8,stem*1.3);eraseOutlines(clean,findBoxes(mask,est),Math.max(2,est*.15));
+ const gray=toGray(img);
  type Found={text:string;confidence:number;box:Box;token:Token;single?:boolean};
  const found:Found[]=[];
  // A lone capital letter is kept only when it follows a word on the same line ("Compressor B", "63 A"); symbols read
  // as letters ("C" for a motor circle) stand apart and are dropped below.
  const single=(text:string,confidence:number)=>/^[A-Z]$/.test(text)&&confidence>=55;
  progress('Reading horizontal text');
- for(const w of await tiled(clean,'horizontal text',recognise,check)){const text=w.text.trim(),one=single(text,w.confidence);if(one||w.confidence>=45&&useful(text,w.confidence))found.push({text,confidence:w.confidence,box:w.bbox,single:one,token:{text,x:w.bbox.x0,y:w.bbox.y1,w:w.bbox.x1-w.bbox.x0,h:Math.max(1,w.bbox.y1-w.bbox.y0),angle:0,page}});}
+ for(const w of await tiled(img,'horizontal text',recognise,check)){const text=w.text.trim(),one=single(text,w.confidence);if(one||w.confidence>=45&&useful(text,w.confidence))found.push({text,confidence:w.confidence,box:w.bbox,single:one,token:{text,x:w.bbox.x0,y:w.bbox.y1,w:w.bbox.x1-w.bbox.x0,h:Math.max(1,w.bbox.y1-w.bbox.y0),angle:0,page}});}
  for(const dir of ['cw','ccw'] as const){
   check();progress(dir==='cw'?'Reading text that runs upwards':'Reading text that runs downwards');
-  for(const w of await tiled(rotate(clean,dir),'vertical text',recognise,check)){const text=w.text.trim(),one=single(text,w.confidence);if(!one&&(w.confidence<70||!useful(text,w.confidence)))continue;
+  for(const w of await tiled(rotate(img,dir),'vertical text',recognise,check)){const text=w.text.trim(),one=single(text,w.confidence);if(!one&&(w.confidence<70||!useful(text,w.confidence)))continue;
    const r=fromRotated(w.bbox,dir,img.width,img.height),cand={text,confidence:w.confidence,box:r.box,single:one,token:{text,x:r.x,y:r.y,w:r.w,h:Math.max(1,r.h),angle:r.angle,page}};
    // The same ink read twice (once upright, once turned): keep the better reading.
    const clash=found.findIndex(f=>overlap(f.box,r.box)>=.5);if(clash<0)found.push(cand);else if(score(cand)>score(found[clash]!))found[clash]=cand;}

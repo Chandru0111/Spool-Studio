@@ -136,7 +136,7 @@ export function Catalogue() {
    const html=await f.text(),to=redirectTarget(html);
    if(to)throw Error(`${f.name} is only a saved link, not the document. Open ${to} in your browser, save the PDF it shows, then read that PDF here.`);
    fromWeb(pageText(html),f.name);return;}
-   const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment'),r=catalogueFromDatasheet(doc.pages,f.name,doc.layout);
+   const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment'),r=catalogueFromDatasheet(doc.pages,f.name,doc.layout,doc.rules);
    setRead({file:f.name,pages:doc.pages,ocr:doc.pages.filter(p=>p.mode==='ocr').length,proposals:r.proposals,brand:brand||r.brand,...(/\.pdf$/i.test(f.name)?{pdf:f,layout:doc.layout}:{})});}
   catch(e){notify(message(e,'Could not read the datasheet.'));}finally{setBusy('');stop.current=null;if(pdf.current)pdf.current.value='';}
  }

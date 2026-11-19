@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {toGray,otsu,inkMask,lineMask,findLines,findBoxes,eraseOutlines,rotate,fromRotated,traceFeeders,type Rgba,type Mask,type Seg} from '../src/import/raster';
+import {toGray,otsu,inkMask,lineMask,findLines,rotate,fromRotated,traceFeeders,type Rgba,type Mask,type Seg} from '../src/import/raster';
 import {readDrawingImage,useful,tokenBox,scaleGeometry,type Word} from '../src/import/drawing-ocr';
 import {extractLoadList,readFacts,type Token} from '../src/import/schematic';
 
@@ -31,11 +31,6 @@ describe('raster helpers',()=>{
  it('does not take a cable route that bends twice for a busbar',()=>{
   const img=paper(400,300);fill(img,50,100,350,103);fill(img,50,20,53,103);fill(img,347,100,350,250);
   expect(traceFeeders(findLines(lineMask(img),12),14,400).buses).toHaveLength(0);
- });
- it('finds breaker boxes even with a feeder through them, but not open letters',()=>{
-  const img=board(),boxes=findBoxes(inkMask(img),14);expect(boxes).toHaveLength(3);
-  const u=paper(100,100);fill(u,20,20,24,60);fill(u,50,20,54,60);fill(u,20,56,54,60);expect(findBoxes(inkMask(u),14)).toHaveLength(0);
-  eraseOutlines(img,boxes,2);expect(findBoxes(inkMask(img),14)).toHaveLength(0);
  });
  it('maps words read on a turned copy back onto the sheet',()=>{
   const img=paper(30,10);fill(img,2,3,6,5);
@@ -113,7 +108,7 @@ describe('drawing notation',()=>{
 describe('hostile images and geometry stay bounded',()=>{
  it('copes with noise, huge stroke counts and thousands of words quickly',async()=>{
   const start=Date.now(),noise=paper(800,800);for(let i=0;i<noise.data.length;i+=4){const v=Math.random()<.5?0:255;noise.data[i]=noise.data[i+1]=noise.data[i+2]=v;}
-  const m:Mask=inkMask(noise);expect(()=>traceFeeders(findLines(m,8),10,800)).not.toThrow();expect(()=>findBoxes(m,10)).not.toThrow();
+  const m:Mask=inkMask(noise);expect(()=>traceFeeders(findLines(m,8),10,800)).not.toThrow();
   const grid=paper(1200,1200);for(let k=0;k<1200;k+=6){fill(grid,0,k,1200,k+2);fill(grid,k,0,k+2,1200);}
   expect(()=>traceFeeders(findLines(lineMask(grid),10),10,1200)).not.toThrow();
   const words:Word[]=Array.from({length:8000},(_,k)=>({text:`W${k}`,confidence:90,bbox:{x0:(k%100)*8,y0:Math.floor(k/100)*10,x1:(k%100)*8+7,y1:Math.floor(k/100)*10+9}}));

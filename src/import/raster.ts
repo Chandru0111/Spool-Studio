@@ -57,46 +57,6 @@ function runs(mask:Mask,minLen:number,vertical:boolean):Seg[] {
  return out;
 }
 export const findLines=(mask:Mask,minLen:number)=>({h:runs(mask,minLen,false),v:runs(mask,minLen,true)});
-// Typical letter stem height, measured before OCR. Columns crossing a horizontal stroke give runs as long as the pen is
-// thick; columns along a letter stem give runs as tall as the letters. The commonest run clearly longer than the pen
-// thickness is the stem, so it tracks the drawing's text size (screenshot or 600 dpi scan alike).
-export function stemHeight(mask:Mask):number {
- const {width:w,height:h,data}=mask,hist=new Uint32Array(301);
- for(let x=0;x<w;x++){let run=0;for(let y=0;y<=h;y++){if(y<h&&data[y*w+x]){run++;continue;}if(run>=1&&run<=300)hist[run]!++;run=0;}}
- const mode=(from:number,to:number)=>{let best=0,at=0;for(let n=Math.max(1,from);n<=Math.min(300,to);n++){const s=hist[n-1]!+hist[n]!+(n<300?hist[n+1]!:0);if(s>best){best=s;at=n;}}return at;};
- const pen=mode(1,40)||2,stem=mode(Math.max(8,pen*3),300);
- return stem||Math.max(10,Math.round(Math.min(w,h)/80));
-}
-
-// Black text on white for OCR: everything darker than the threshold becomes black, long straight lines are erased so
-// labels touching a busbar or feeder still read as words.
-export function ocrImage(img:Rgba,mask:Mask,lines:{h:Seg[];v:Seg[]}):Rgba {
- const {width:w,height:h}=img,data=new Uint8ClampedArray(w*h*4).fill(255),m=mask.data.slice();
- for(const s of lines.h){const y0=Math.max(0,Math.floor(s.y0-s.t/2-1)),y1=Math.min(h-1,Math.ceil(s.y0+s.t/2+1));for(let y=y0;y<=y1;y++)m.fill(0,y*w+Math.max(0,Math.floor(s.x0)),y*w+Math.min(w,Math.ceil(s.x1)+1));}
- for(const s of lines.v){const x0=Math.max(0,Math.floor(s.x0-s.t/2-1)),x1=Math.min(w-1,Math.ceil(s.x0+s.t/2+1));for(let y=Math.max(0,Math.floor(s.y0));y<=Math.min(h-1,Math.ceil(s.y1));y++)m.fill(0,y*w+x0,y*w+x1+1);}
- for(let p=0;p<m.length;p++)if(m[p]){const i=p*4;data[i]=data[i+1]=data[i+2]=0;}
- return {width:w,height:h,data};
-}
-
-// Breaker and symbol boxes drawn against a rating ("[]63A") make OCR read junk. Boxes are found on the ink before any
-// line is erased (a feeder passing through a box would split it into two brackets): two matching horizontal edges about
-// a box-width apart, joined by vertical sides at both ends. Only the outline is returned, so text inside a frame stays.
-export function findBoxes(mask:Mask,textHeight:number):Box[] {
- const lo=Math.round(textHeight*1.1),hi=textHeight*3.2,tol=Math.max(3,textHeight*.2);
- const H=runs(mask,lo,false).filter(s=>s.x1-s.x0<=hi&&s.t<=textHeight*.4).sort((a,b)=>a.y0-b.y0),V=runs(mask,lo,true).filter(s=>s.y1-s.y0<=hi+2*tol&&s.t<=textHeight*.4);
- const byX=new Map<number,Seg[]>(),key=(x:number)=>Math.round(x/tol);for(const v of V){const k=key(v.x0),l=byX.get(k);if(l)l.push(v);else byX.set(k,[v]);}
- const side=(x:number,y0:number,y1:number)=>[key(x)-1,key(x),key(x)+1].some(k=>(byX.get(k)??[]).some(v=>Math.abs(v.x0-x)<=tol&&v.y0<=y0+tol&&v.y1>=y1-tol));
- const out:Box[]=[];
- for(let i=0;i<H.length&&out.length<5000;i++){const top=H[i]!,len=top.x1-top.x0;
-  for(let j=i+1;j<H.length;j++){const bot=H[j]!,dy=bot.y0-top.y0;if(dy>1.6*len)break;if(dy<.6*len||Math.abs(bot.x0-top.x0)>tol||Math.abs(bot.x1-top.x1)>tol)continue;
-   if(side(Math.min(top.x0,bot.x0)+1,top.y0,bot.y0)&&side(Math.max(top.x1,bot.x1)-1,top.y0,bot.y0)){out.push({x0:Math.min(top.x0,bot.x0),y0:top.y0-top.t/2,x1:Math.max(top.x1,bot.x1),y1:bot.y0+bot.t/2});break;}}}
- return out;
-}
-// White out box outlines (a band as thick as the stroke) in an RGBA image.
-export function eraseOutlines(img:Rgba,boxes:readonly Box[],band:number):void {
- const {width:w,height:h,data}=img,paint=(x0:number,y0:number,x1:number,y1:number)=>{for(let y=Math.max(0,Math.floor(y0));y<=Math.min(h-1,Math.ceil(y1));y++)for(let x=Math.max(0,Math.floor(x0));x<=Math.min(w-1,Math.ceil(x1));x++){const i=(y*w+x)*4;data[i]=data[i+1]=data[i+2]=255;}};
- for(const b of boxes){paint(b.x0-band,b.y0-band,b.x1+band,b.y0+band);paint(b.x0-band,b.y1-band,b.x1+band,b.y1+band);paint(b.x0-band,b.y0-band,b.x0+band,b.y1+band);paint(b.x1-band,b.y0-band,b.x1+band,b.y1+band);}
-}
 // Quarter turns. cw: a word reading upwards in the original reads left to right in the copy; ccw: one reading downwards.
 export function rotate(img:Rgba,dir:'cw'|'ccw'):Rgba {
  const {width:w,height:h,data}=img,out=new Uint8ClampedArray(data.length);

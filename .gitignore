@@ -20,3 +20,4 @@ outputs/
 *.dxf
 *.dwg
 !public/templates/cable-sizing.xlsx
+.playwright-mcp/

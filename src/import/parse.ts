@@ -85,6 +85,45 @@ export function extractCandidates(pages:PageEvidence[],name:string):Rating[] {
 }
 
 export type PositionedLine={y?:number;cells:{x:number;w?:number;h?:number;y?:number;text:string}[]};
+// A straight edge or filled box drawn on a page (table border, rule, shaded cell), in page points.
+export type Rule={x0:number;y0:number;x1:number;y1:number};
+// The borders, rules and shaded cells drawn on a page, from pdf.js's operator list: each straight horizontal or vertical
+// line, and each axis-aligned rectangle, in page points (the drawing's own transforms applied). Curves and clipping
+// paths are left out. ops holds pdf.js's operator numbers (pdfjs.OPS).
+export function rulesOf(fnArray:ArrayLike<number>,argsArray:readonly unknown[],ops:{save:number;restore:number;transform:number;paintFormXObjectBegin:number;paintFormXObjectEnd:number;beginGroup:number;endGroup:number;constructPath:number;endPath:number}):Rule[] {
+  type M=[number,number,number,number,number,number];
+  const out:Rule[]=[],stack:M[]=[];let m:M=[1,0,0,1,0,0];
+  const mul=(a:M,b:readonly number[]):M=>[a[0]*b[0]!+a[2]*b[1]!,a[1]*b[0]!+a[3]*b[1]!,a[0]*b[2]!+a[2]*b[3]!,a[1]*b[2]!+a[3]*b[3]!,a[0]*b[4]!+a[2]*b[5]!+a[4],a[1]*b[4]!+a[3]*b[5]!+a[5]];
+  const at=(x:number,y:number)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]] as const;
+  const edge=(pts:(readonly [number,number])[])=>{
+    const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    // A line runs along one axis; a box has every corner on its bounding edges.
+    if(pts.every(([x,y])=>(Math.abs(x-x0)<0.5||Math.abs(x-x1)<0.5)&&(Math.abs(y-y0)<0.5||Math.abs(y-y1)<0.5))||x1-x0<0.5||y1-y0<0.5)out.push({x0,y0,x1,y1});
+  };
+  for(let i=0;i<fnArray.length&&out.length<20000;i++){
+    const fn=fnArray[i],args=argsArray[i] as unknown[]|null;
+    if(fn===ops.save)stack.push(m);
+    else if(fn===ops.restore)m=stack.pop()??m;
+    else if(fn===ops.transform&&args)m=mul(m,args as number[]);
+    else if(fn===ops.paintFormXObjectBegin&&args){stack.push(m);if(Array.isArray(args[0]))m=mul(m,args[0] as number[]);}
+    else if(fn===ops.paintFormXObjectEnd||fn===ops.endGroup)m=stack.pop()??m;
+    else if(fn===ops.beginGroup&&args){stack.push(m);const g=args[0] as {matrix?:number[]}|null;if(g?.matrix)m=mul(m,g.matrix);}
+    else if(fn===ops.constructPath&&args&&args[0]!==ops.endPath){
+      const path=(args[1] as unknown[]|undefined)?.[0] as ArrayLike<number>|undefined;if(!path||typeof path.length!=='number')continue;
+      let pts:(readonly [number,number])[]=[],curved=false;
+      const close=()=>{if(!curved&&pts.length>=2)edge(pts);pts=[];curved=false;};
+      for(let k=0;k<path.length;){
+        const op=path[k++];
+        if(op===0){close();pts.push(at(path[k++]!,path[k++]!));}
+        else if(op===1)pts.push(at(path[k++]!,path[k++]!));
+        else if(op===2){curved=true;k+=6;}
+        else close();
+      }
+      close();
+    }
+  }
+  return out;
+}
 // OCR words in the text layer's terms, so the table reader reads a scan as it reads a typed PDF: each word's box turned
 // into page points by toPoint (pixel x, y from the top left in; PDF x, y from the bottom left out), words at one height
 // gathered into a line, and words a space apart into one item ("Rated Power", "AXR 315MB2").

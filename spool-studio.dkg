@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "d91c7bccd4dea97015c08c1035e17dbd173f6ca8211bff12caf0b1b3f6f4ae51",
+  "sourceFingerprint": "9e1e306ec8dbb64c352186f6f0f9f7acf64c49cb05a007253277fe2da524581e",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -230,9 +230,10 @@
       "src/engine/drums.ts": "Pure layer/turn geometry, bend-radius and payload/lift constraints, per-run allowance and first-fit decreasing allocation.",
       "src/engine/result.ts": "Typed success/error union for recoverable engine results.",
       "src/import/load-list.ts": "ExcelJS read-only workbook import, CSV/TSV parser, header aliases, explicit unit cleanup, mapping and drum-template parsing. Ambiguous numbers remain invalid instead of being partially parsed.",
-      "src/import/document.ts": "Local PDF text extraction with position-aware columns and English Tesseract OCR fallback. Used by supplier drum imports in this build.",
+      "src/import/document.ts": "Local PDF text extraction with position-aware columns, drawn table borders for equipment datasheet pages (rulesOf), and on-device PaddleOCR for scanned pages (ocrReader loads ONNX Runtime and the models from vendor/ocr/; imagePixels). Used by supplier drum imports and the catalogue datasheet reader.",
+      "src/import/ocr.ts": "On-device PaddleOCR PP-OCRv5 mobile through ONNX Runtime Web (wasm; threads when the page is cross-origin isolated): DB text-line detection, a reader picked per page (Latin, Cyrillic or Chinese) by its confidence on the widest lines, greedy CTC decoding, each line read whole and its words shared out over its printed parts by length (parts found from ink, grid lines ignored). Models live in models/paddleocr (Apache-2.0, commits and hashes pinned).",
       "src/import/drum-catalogue.ts": "Supplier drum CSV/XLSX import or explicitly labelled/unit-qualified PDF/image text extraction. Candidate values require review before activation.",
-      "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading, and ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs); electrical catalogue UI is archived.",
+      "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading, ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs), and rulesOf (table borders and shaded cells from pdf.js's operator list, in page points); electrical catalogue UI is archived.",
       "src/export/template.ts": "Patches only entered input cells in the original XLSX ZIP, retains all formulas/validations/styles, extends beyond 196 rows and adds preview caches.",
       "src/store/schema.ts": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
       "src/store/project.ts": "Tab-scoped sessionStorage autosave and erasure, targeted cleanup of legacy IndexedDB project keys, validated backup import and browser downloads.",
@@ -243,7 +244,7 @@
       "src/ui/app.css": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "src/data/sizing-tables.json": "Generated lookup data: 67 columns (A–BO), 3,260 ratings in 461 blocks, 27 temperature rows, 100 grouping keys and 7 soil rows. Also the FaultData tables (Cu resistance, k values, resistance multipliers, device multiples, transformer Uz) and the Settings defaults Ze, fault level, clearance time and Cmin. Plus the CPC type table (k, resistance multipliers, same-material and IEC 60228 flags) and the SS 638 Table 41.1 disconnection times (TN-S and TT), the earthing system list and the default earthing system.",
       "scripts/extract-workbook.mjs": "Extracts workbook tables for the 67 app columns A–BO (validations of visible columns, all Settings notes, the FaultData sheet incl. CPC types, TN-S/TT disconnection times and the earthing list, and Settings defaults incl. Def_Earthing) and copies the unmodified template; checks contiguous lookup blocks.",
-      "scripts/build.mjs": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Each build verifies the approved release file list, the blank workbook and pinned runtime assets. Unexpected files and links prevent publishing. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin and a restrictive Permissions-Policy.",
+      "scripts/build.mjs": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Each build verifies the approved release file list, the blank workbook and pinned runtime assets. Unexpected files and links prevent publishing. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin, COEP require-corp (cross-origin isolation lets the OCR use threads) and a restrictive Permissions-Policy.",
       "scripts/verify-vendor.mjs": "Verifies the release file list and compares the blank workbook and bundled PDF, OCR and font assets with reviewed SHA-256 pins.",
       "scripts/dkg.mjs": "Generates this graph, code/import/export index, file hashes, change history and stale-check commands. Watches project files during dev.",
       "scripts/verify.mjs": "Runs the full check sequence, records results against a source fingerprint and refreshes the DKG.",
@@ -253,10 +254,10 @@
       "src/engine/issues.ts": "Derives errors (invalid cells, current/VD FAIL), warnings (None passes, Out of range, duplicate To tags, total-VD chain breaks) and info (missing inputs) from calculated rows. Cell references use Excel row numbers.",
       "src/import/guard.ts": "Pre-parse guards: XLSX ZIP central-directory size/entry limits (checkZip) and image header dimensions (imageSize/checkImage, 12,000 px side / 60 MP) before any decoder runs; used by load-list, schematic and drum/catalogue imports.",
       "src/import/schematic.ts": "Pure, deterministic schematic-to-load-list engine (no AI). DXF parser (TEXT/MTEXT/ATTRIB, binary/size guards, bounded MTEXT clean-up), glyph/word merging on shared baselines, readFacts (breaker A, poles/phase, kW/HP/W/kVA, PF, diversity, voltage incl. 400/230 pairs but not cable insulation ratings, cable type/cores/size/sets, run length, tags, board names, fed-from/feeds-to, spares, title-block words), circuit-schedule table detection (reuses detectColumns/toSheetRows plus cell rescue), single-line-diagram grouping around breaker ratings for column or row layouts with a proximity fallback, board ownership, From→To feeder chain, deduplication across drawings, inferred values with reasons, and limits (100k text items, 20k per page, 4k breakers per page, 200 pages, 2,000 candidates). Traced line work (from images or rendered PDF pages) gives one row per feeder: the busbar label (board tag first, within 7 text heights above or 15 left of its start) is From for drops and To for incomers; labels attach to the nearest feeder by distance from the nearest part of the text, with the far end counting 4 text heights closer and vertical text along the feeder preferred for the load name. Also reads US/MV notation (6-1/C 500 → 1C, 500 kcmil, 2 sets; 3/0 AWG; ft and miles to metres; MW, MVA), ETAP-style tags (TR:4, 3WTR:1, Bus A), transformer ratings into B, and treats a bare C16 as an MCB rating only on pages that mention MCBs or amps.",
-      "src/import/schematic-read.ts": "Browser reader for schematics: pdf.js text with page rotation and text direction, OCR (sparse-text mode) for pages without a text layer or for images, UTF-8/Windows-1252 DXF decoding, cancel support, 25 MB/page/text-item limits, image header dimension check before decoding, friendly pdf.js and DWG messages. Images and scanned PDF pages go through drawing-ocr (scale up to 2x for small screenshots, 24 MP working budget); vector PDF pages are rendered to trace busbars and feeders under the text layer. Returns the text read for the review.",
+      "src/import/schematic-read.ts": "Browser reader for schematics: pdf.js text with page rotation and text direction, PaddleOCR for pages without a text layer or for images, UTF-8/Windows-1252 DXF decoding, cancel support, 25 MB/page/text-item limits, image header dimension check before decoding, friendly pdf.js and DWG messages. Images and scanned PDF pages go through drawing-ocr (scale up to 2x for small screenshots, 24 MP working budget); vector PDF pages are rendered to trace busbars and feeders under the text layer. Returns the text read for the review.",
       "src/ui/Schematic.tsx": "Review dialog for circuits read from a schematic: tick/untick rows, page and source text per row, worked-out values in italics with their reason, notes (spares skipped, unsupported voltages, DC, unticked fed-from feeders), Create load list / Add to current list. Opens even when no circuits are recognised, explaining why and showing the text that was read; a collapsible \"Text read from the drawing\" panel is always available.",
-      "src/import/raster.ts": "Pure image helpers for drawings (plain RGBA arrays, linear in pixels): luminance, Otsu threshold, ink mask, line mask that ignores strongly coloured mark-ups, letter stem height measured from vertical run lengths, straight-stroke detection with thickness, box detection (breaker/symbol outlines found before lines are erased) and outline erasing, OCR clean image with long lines erased, quarter-turn rotation and mapping of rotated word boxes, and feeder tracing: busbars are long horizontal strokes with feeders (two if heavier than other long lines, else three; twice-bent cable routes rejected), feeders are followed through bends and across symbol gaps (breakers, fuses, coils) using an endpoint grid. Limits: 8,000 strokes, 60 busbars, 1,500 feeders.",
-      "src/import/drawing-ocr.ts": "Image pipeline shared by browser and tests: clean image (threshold, long lines and symbol boxes erased), OCR in three orientations (upright, upward, downward text) with tiling for large sheets, noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry.",
+      "src/import/raster.ts": "Pure image helpers for drawings (plain RGBA arrays, linear in pixels): luminance, Otsu threshold, ink mask, line mask that ignores strongly coloured mark-ups, straight-stroke detection with thickness, quarter-turn rotation and mapping of rotated word boxes, and feeder tracing: busbars are long horizontal strokes with feeders (two if heavier than other long lines, else three; twice-bent cable routes rejected), feeders are followed through bends and across symbol gaps (breakers, fuses, coils) using an endpoint grid. Limits: 8,000 strokes, 60 busbars, 1,500 feeders.",
+      "src/import/drawing-ocr.ts": "Image pipeline shared by browser and tests: OCR of the page as drawn (PaddleOCR reads text among line work; erasing lines cut letters) in three orientations (upright, upward, downward text) with tiling for large sheets (each word kept from the tile that owns its centre), noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry.",
       "src/engine/loads.ts": "Equipment-list engine: row and catalogue shapes, catalogue index and fill (Brand + Model + Configuration), per-row kW/kVAr/load factor, panel and plant totals with operating factors and design margin, and the scenario comparison.",
       "src/import/equipment.ts": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "src/export/equipment.ts": "Load list Excel export: a cover page, then one sheet per panel laid out cell for cell as the engineer's designed panel sheet (equipment-layout.ts) with live formulas; catalogue-only export.",
@@ -265,7 +266,7 @@
       "src/ui/Scenario.tsx": "Search across panels by KKS/description, scenario comparison table and inline-SVG grouped bar charts, plant load by panel.",
       "src/export/equipment-layout.ts": "Panel sheet layout: header rows 1-6, at least 32 item rows, the running plant load, operating factors and load basis summary, page setup; formulas with cached results.",
       "src/import/vocabulary.ts": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix).",
-      "src/import/rating-table.ts": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view.",
+      "src/import/rating-table.ts": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values.",
       "src/import/webpage.ts": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright."
     },
     "calculationReference": {
@@ -450,6 +451,7 @@
       "src/import/equipment.ts",
       "src/import/guard.ts",
       "src/import/load-list.ts",
+      "src/import/ocr.ts",
       "src/import/panels.ts",
       "src/import/parse.ts",
       "src/import/raster.ts",
@@ -484,13 +486,12 @@
       "@fontsource/ibm-plex-mono": "5.2.7",
       "@fontsource/ibm-plex-sans": "5.2.7",
       "@preact/signals": "2.3.2",
-      "@tesseract.js-data/eng": "1.0.0",
       "exceljs": "4.4.0",
       "jszip": "3.10.2",
       "lucide-preact": "0.468.0",
+      "onnxruntime-web": "1.31.1",
       "pdfjs-dist": "5.4.296",
       "preact": "10.29.8",
-      "tesseract.js": "6.0.1",
       "zod": "4.6.7"
     },
     "commands": {
@@ -595,10 +596,6 @@
       {
         "file": "tests/drawing.test.ts",
         "name": "does not take a cable route that bends twice for a busbar"
-      },
-      {
-        "file": "tests/drawing.test.ts",
-        "name": "finds breaker boxes even with a feeder through them, but not open letters"
       },
       {
         "file": "tests/drawing.test.ts",
@@ -830,6 +827,18 @@
       },
       {
         "file": "tests/loads.test.ts",
+        "name": "reads borders and shaded cells from the PDF drawing, in page points"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "gives each heading the column inside its drawn cell"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "takes efficiency at full load when the heading sits over the 75 % column only"
+      },
+      {
+        "file": "tests/loads.test.ts",
         "name": "reads a scanned table from OCR word boxes"
       },
       {
@@ -843,6 +852,26 @@
       {
         "file": "tests/loads.test.ts",
         "name": "flags values from the local model that are not on the page"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads the character list from a model settings file"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "decodes CTC output: repeats merge, a blank separates a repeated letter"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "finds text regions in the probability map and grows them by the unclip margin"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "cuts a detected line into its printed parts, ignoring grid lines"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "shares a line's words out over its parts by length"
       },
       {
         "file": "tests/panels.test.ts",
@@ -1060,8 +1089,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-19T02:31:01.906Z",
-    "sourceFingerprint": "d91c7bccd4dea97015c08c1035e17dbd173f6ca8211bff12caf0b1b3f6f4ae51",
+    "checkedAt": "2026-11-19T07:52:31.738Z",
+    "sourceFingerprint": "9e1e306ec8dbb64c352186f6f0f9f7acf64c49cb05a007253277fe2da524581e",
     "status": "passed",
     "steps": [
       {
@@ -1072,7 +1101,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  12 passed (12); Tests  138 passed (138)"
+        "summary": "Test Files  12 passed (12); Tests  145 passed (145)"
       },
       {
         "command": "npm run build",
@@ -1090,8 +1119,8 @@
   "files": [
     {
       "path": ".gitignore",
-      "bytes": 205,
-      "sha256": "348135f1da4a267e3ac81795498fd4a3a20961965e20280a05b52c3f2577b5d8",
+      "bytes": 222,
+      "sha256": "4fd191823fc3b091002f24dcd1fd24f6fb0c9b956054adf22b1469c7a1223787",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1104,8 +1133,8 @@
     },
     {
       "path": "AGENTS.md",
-      "bytes": 24718,
-      "sha256": "c983345d1f4b5d7760c36f8b6a46716f2a178a64223e7605ac512281878bd94f",
+      "bytes": 25123,
+      "sha256": "32af4768dcbb0e8d4a73ee0b7fcf5d946aa71db20bae7f4c66cb51c683de3d1f",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1118,8 +1147,8 @@
     },
     {
       "path": "docs/project-knowledge.json",
-      "bytes": 43401,
-      "sha256": "1142def59e947f9fd36f502f9f8ba534acd601c96aba6601f632c5b856432ac3",
+      "bytes": 44368,
+      "sha256": "97c1cfb9ad7558e94619ea82e393c63c53b8eb5d3a5d0f32d8d90f137eedbc1d",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1140,28 +1169,28 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "d0272a222f353ae137e38defb121ac41fd6097c77ab039777549dbd786e1a79e",
+      "sha256": "a2f69e609f3c22e3a7d48fc7a09001fea29ab52c894aecfca3e0531d053ddfdb",
       "role": "Project documentation.",
       "runtime": false
     },
     {
       "path": "package-lock.json",
-      "bytes": 163564,
-      "sha256": "7a113f69c3ac9f6c5648f5fbb4ca98fbf67e22e77b2fc33b02cad4a854bde6ae",
+      "bytes": 164083,
+      "sha256": "6714d15af5f4ccd9ec47b45d825a5b21362f24b93cc0a4e816d6f721edf27579",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "package.json",
-      "bytes": 1026,
-      "sha256": "4f83cf7d3310e227dfea1dbf06341ff19b9c6fdc89d8586a0daee59e576ebb18",
+      "bytes": 991,
+      "sha256": "694dd7c13a4249e3631d0cc442287f2e8e4f63b1fc88e00c0d4d0bcafee85c05",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "public/_headers",
-      "bytes": 878,
-      "sha256": "e2bfad61d86940316671381f73938552a693f02303ff0571cfbe161eaf72fc9f",
+      "bytes": 923,
+      "sha256": "7e26d5a9c26cb4567e7d95fb1d4699390c3030edae3307c435bc03cba8bed781",
       "role": "Local static asset.",
       "runtime": false
     },
@@ -1188,9 +1217,9 @@
     },
     {
       "path": "scripts/build.mjs",
-      "bytes": 4126,
-      "sha256": "9d6f5309213a19d912c3e053fe094509f6ba69d5178d36df96db66f3cfeebc84",
-      "role": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Each build verifies the approved release file list, the blank workbook and pinned runtime assets. Unexpected files and links prevent publishing. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin and a restrictive Permissions-Policy.",
+      "bytes": 4384,
+      "sha256": "8d038c86853a4ac7a4712e2b2a67b1dfbf85596f029bedc4a17cc10c126b938e",
+      "role": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Each build verifies the approved release file list, the blank workbook and pinned runtime assets. Unexpected files and links prevent publishing. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin, COEP require-corp (cross-origin isolation lets the OCR use threads) and a restrictive Permissions-Policy.",
       "exports": [],
       "imports": [
         "./dkg.mjs",
@@ -1240,8 +1269,8 @@
     },
     {
       "path": "scripts/vendor-checksums.txt",
-      "bytes": 21234,
-      "sha256": "d316529eb9873f09e00e847979a6b2c684cf013e9251f6c96dc0c0c1a8fb936b",
+      "bytes": 21143,
+      "sha256": "a54a438d1fe94c309b0bacb5e4d76a7d44452d47b7ded3db6cc94385042f61dc",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1577,31 +1606,33 @@
     },
     {
       "path": "src/import/document.ts",
-      "bytes": 8986,
-      "sha256": "bcb7698d618a82690338d065ce04e1c9aba06db3f482110a2ce8ab39e89659ef",
-      "role": "Local PDF text extraction with position-aware columns and English Tesseract OCR fallback. Used by supplier drum imports in this build.",
+      "bytes": 10456,
+      "sha256": "fc3d0314a6c350ef72923df13233bec1cc8a797ee9cc51bff0e86b27b15bafa4",
+      "role": "Local PDF text extraction with position-aware columns, drawn table borders for equipment datasheet pages (rulesOf), and on-device PaddleOCR for scanned pages (ocrReader loads ONNX Runtime and the models from vendor/ocr/; imagePixels). Used by supplier drum imports and the catalogue datasheet reader.",
       "exports": [
         "MAX_DOCUMENT",
         "MAX_PAGES",
         "Progress",
         "closePage",
+        "imagePixels",
+        "ocrReader",
         "readCatalogue",
         "renderPage"
       ],
       "imports": [
         "../store/schema",
         "./guard",
+        "./ocr",
         "./parse",
-        "exceljs",
-        "tesseract.js"
+        "exceljs"
       ],
       "runtime": true
     },
     {
       "path": "src/import/drawing-ocr.ts",
-      "bytes": 7677,
-      "sha256": "8fcaebc963cb95c1253cf4e5adbc53d3c944df6f36ada7bc26f44a1c8eb36ad2",
-      "role": "Image pipeline shared by browser and tests: clean image (threshold, long lines and symbol boxes erased), OCR in three orientations (upright, upward, downward text) with tiling for large sheets, noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry.",
+      "bytes": 7823,
+      "sha256": "4d98920c7993ef9adee76d7ecd75e13851f6fa999e3cafada3e7bcac94fa392a",
+      "role": "Image pipeline shared by browser and tests: OCR of the page as drawn (PaddleOCR reads text among line work; erasing lines cut letters) in three orientations (upright, upward, downward text) with tiling for large sheets (each word kept from the tile that owns its centre), noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry.",
       "exports": [
         "DrawingRead",
         "Recognise",
@@ -1708,6 +1739,27 @@
       "runtime": true
     },
     {
+      "path": "src/import/ocr.ts",
+      "bytes": 12991,
+      "sha256": "2fffd06584251d6d2c37562fb56459c8c13e8dd871d8174ccd1b6bd82744a5ec",
+      "role": "On-device PaddleOCR PP-OCRv5 mobile through ONNX Runtime Web (wasm; threads when the page is cross-origin isolated): DB text-line detection, a reader picked per page (Latin, Cyrillic or Chinese) by its confidence on the widest lines, greedy CTC decoding, each line read whole and its words shared out over its printed parts by length (parts found from ink, grid lines ignored). Models live in models/paddleocr (Apache-2.0, commits and hashes pinned).",
+      "exports": [
+        "Image",
+        "OcrWord",
+        "READERS",
+        "charList",
+        "ctcDecode",
+        "inkParts",
+        "paddleOcr",
+        "shareOut",
+        "textBoxes"
+      ],
+      "imports": [
+        "onnxruntime-web"
+      ],
+      "runtime": true
+    },
+    {
       "path": "src/import/panels.ts",
       "bytes": 10104,
       "sha256": "715311af6aa61501c68014a86c67654551e6e91c27708c6b7042b48c3c5a9678",
@@ -1725,20 +1777,22 @@
     },
     {
       "path": "src/import/parse.ts",
-      "bytes": 11522,
-      "sha256": "d9f321e2fd11a12fcd4b070c433c91b697d8e1edbfffacbcfb704849fa6acd30",
-      "role": "Delimited text and cable-field extraction helpers shared with document reading, and ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs); electrical catalogue UI is archived.",
+      "bytes": 14296,
+      "sha256": "48ca9ec8420c1bc763b1150d9f355f57d393963de2f2f84f6f4a445117f43e52",
+      "role": "Delimited text and cable-field extraction helpers shared with document reading, ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs), and rulesOf (table borders and shaded cells from pdf.js's operator list, in page points); electrical catalogue UI is archived.",
       "exports": [
         "MAX_COLS",
         "MAX_ROWS",
         "PositionedLine",
+        "Rule",
         "blankRating",
         "extractCandidates",
         "extractPositionedTable",
         "ocrLines",
         "parseDelimited",
         "parseTable",
-        "reviewProblems"
+        "reviewProblems",
+        "rulesOf"
       ],
       "imports": [
         "../store/schema"
@@ -1747,9 +1801,9 @@
     },
     {
       "path": "src/import/raster.ts",
-      "bytes": 14446,
-      "sha256": "7d49e0e254480162557a43fb8c53ad6201a50ae4cb5a193865b5e9459c537f31",
-      "role": "Pure image helpers for drawings (plain RGBA arrays, linear in pixels): luminance, Otsu threshold, ink mask, line mask that ignores strongly coloured mark-ups, letter stem height measured from vertical run lengths, straight-stroke detection with thickness, box detection (breaker/symbol outlines found before lines are erased) and outline erasing, OCR clean image with long lines erased, quarter-turn rotation and mapping of rotated word boxes, and feeder tracing: busbars are long horizontal strokes with feeders (two if heavier than other long lines, else three; twice-bent cable routes rejected), feeders are followed through bends and across symbol gaps (breakers, fuses, coils) using an endpoint grid. Limits: 8,000 strokes, 60 busbars, 1,500 feeders.",
+      "bytes": 10516,
+      "sha256": "715a44a4656884ad1a1a40f72903d62c492969531c6f6940ecc131511518e6d1",
+      "role": "Pure image helpers for drawings (plain RGBA arrays, linear in pixels): luminance, Otsu threshold, ink mask, line mask that ignores strongly coloured mark-ups, straight-stroke detection with thickness, quarter-turn rotation and mapping of rotated word boxes, and feeder tracing: busbars are long horizontal strokes with feeders (two if heavier than other long lines, else three; twice-bent cable routes rejected), feeders are followed through bends and across symbol gaps (breakers, fuses, coils) using an endpoint grid. Limits: 8,000 strokes, 60 busbars, 1,500 feeders.",
       "exports": [
         "Box",
         "Feeder",
@@ -1759,17 +1813,13 @@
         "Rgba",
         "Seg",
         "clearBoxes",
-        "eraseOutlines",
-        "findBoxes",
         "findLines",
         "fromRotated",
         "inkMask",
         "lineMask",
-        "ocrImage",
         "otsu",
         "overlap",
         "rotate",
-        "stemHeight",
         "toGray",
         "traceFeeders"
       ],
@@ -1778,9 +1828,9 @@
     },
     {
       "path": "src/import/rating-table.ts",
-      "bytes": 21992,
-      "sha256": "78e506e4359c6cd8f710197418a68afe02a57e5535f3a672517450b214f0a865",
-      "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view.",
+      "bytes": 25546,
+      "sha256": "497e177f7b4154d1eff7a74b08b4502d3d8981cef4acb3c979bf8015cbea22c2",
+      "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values.",
       "exports": [
         "catalogueFromTables"
       ],
@@ -1795,9 +1845,9 @@
     },
     {
       "path": "src/import/schematic-read.ts",
-      "bytes": 9469,
-      "sha256": "c56ff4f1ff67fef26e098558499fcaa2120501ec21ca0b7f85d8284ad8b189b5",
-      "role": "Browser reader for schematics: pdf.js text with page rotation and text direction, OCR (sparse-text mode) for pages without a text layer or for images, UTF-8/Windows-1252 DXF decoding, cancel support, 25 MB/page/text-item limits, image header dimension check before decoding, friendly pdf.js and DWG messages. Images and scanned PDF pages go through drawing-ocr (scale up to 2x for small screenshots, 24 MP working budget); vector PDF pages are rendered to trace busbars and feeders under the text layer. Returns the text read for the review.",
+      "bytes": 8663,
+      "sha256": "ef2bc2bba13076e08db76c995be1c575c0b5641596ccbdc0b55d6b3d89a1e6a2",
+      "role": "Browser reader for schematics: pdf.js text with page rotation and text direction, PaddleOCR for pages without a text layer or for images, UTF-8/Windows-1252 DXF decoding, cancel support, 25 MB/page/text-item limits, image header dimension check before decoding, friendly pdf.js and DWG messages. Images and scanned PDF pages go through drawing-ocr (scale up to 2x for small screenshots, 24 MP working budget); vector PDF pages are rendered to trace busbars and feeders under the text layer. Returns the text read for the review.",
       "exports": [
         "SCHEMATIC_ACCEPT",
         "SchematicRead",
@@ -1809,8 +1859,7 @@
         "./drawing-ocr",
         "./guard",
         "./raster",
-        "./schematic",
-        "tesseract.js"
+        "./schematic"
       ],
       "runtime": true
     },
@@ -1853,8 +1902,8 @@
     },
     {
       "path": "src/import/webpage.ts",
-      "bytes": 15486,
-      "sha256": "aa44ef381f4c407b6151fddded11dfa0381230dffa3fa6a52aae986d35a29dcf",
+      "bytes": 15549,
+      "sha256": "aecbd864e421fae03d9d3660198834131fad2e6b5369ebc1ff5bad47d4c9b142",
       "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright.",
       "exports": [
         "MAX_PAGE",
@@ -2009,8 +2058,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 20937,
-      "sha256": "4f42d180334e2884fe3f33acaf6a6c1a5bfaa4fe9fb300a77f36e0ed304d394b",
+      "bytes": 20947,
+      "sha256": "86dbd8ad8e7dd237b85bfd8ba6babfe29dd7581c12736c42403fe262c9854019",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
@@ -2408,8 +2457,8 @@
     },
     {
       "path": "tests/drawing.test.ts",
-      "bytes": 11462,
-      "sha256": "026282d2f9fd96bc8b3939e93a19a351d6b7bbebea097c74a7d3b5fa87f21d2a",
+      "bytes": 11005,
+      "sha256": "07d2d7aa17d0b697f4e92dd818f6cb05591f347de039f01a0e9f390b9c3187c4",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2423,7 +2472,6 @@
         "finds straight strokes with their thickness",
         "traces each feeder from the busbar through breaker and fuse symbols to its end",
         "does not take a cable route that bends twice for a busbar",
-        "finds breaker boxes even with a feeder through them, but not open letters",
         "maps words read on a turned copy back onto the sheet",
         "keeps upright and vertical words, drops symbol noise and lone letters that follow nothing",
         "treats short words as noise unless they are drawing abbreviations or carry a digit",
@@ -2452,8 +2500,8 @@
     },
     {
       "path": "tests/hardening.test.ts",
-      "bytes": 9954,
-      "sha256": "ee5d55236528475996b98dfdef6214a4e25e751878b9841e724f54bef1c9d4fc",
+      "bytes": 9985,
+      "sha256": "d2a37e2c3d2aaad705962b889eda1147f9d367fe65dc66652e1281a65ef0eefe",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2515,8 +2563,8 @@
     },
     {
       "path": "tests/loads.test.ts",
-      "bytes": 31894,
-      "sha256": "0d100fbae396567c85c5829fa26de151d347b30e95d983507896c769ef66f52f",
+      "bytes": 36355,
+      "sha256": "b5ef9e0902c590981211d28931f08265837a485f90afb7d5bb1fae0b48a1e577",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2526,6 +2574,7 @@
         "../src/export/equipment-layout",
         "../src/import/equipment",
         "../src/import/load-list",
+        "../src/import/ocr",
         "../src/import/parse",
         "../src/import/rating-table",
         "../src/import/webpage",
@@ -2561,10 +2610,18 @@
         "tells apart one frame at several outputs by its kW; a type is the model and a numeric part number the configuration",
         "reads headings in other languages and takes the product name printed over a size-only table",
         "finds kW, In, efficiency and power factor by the values alone when no heading is understood",
+        "reads borders and shaded cells from the PDF drawing, in page points",
+        "gives each heading the column inside its drawn cell",
+        "takes efficiency at full load when the heading sits over the 75 % column only",
         "reads a scanned table from OCR word boxes",
         "finds where values are printed when a reader kept no positions",
         "finds labelled values and checks them against the page",
-        "flags values from the local model that are not on the page"
+        "flags values from the local model that are not on the page",
+        "reads the character list from a model settings file",
+        "decodes CTC output: repeats merge, a blank separates a repeated letter",
+        "finds text regions in the probability map and grows them by the unclip margin",
+        "cuts a detected line into its printed parts, ignoring grid lines",
+        "shares a line's words out over its parts by length"
       ],
       "runtime": false
     },
@@ -2720,8 +2777,8 @@
     },
     {
       "path": "vercel.json",
-      "bytes": 1310,
-      "sha256": "ed93a1b0db720fb67160083dc7e36b77031354ddb67fd26cadaa176214a80f1b",
+      "bytes": 1384,
+      "sha256": "f96fb0c77dac21a4a15e0cb2c2f0299dfc643629d70b8dcd2f1b9dbb3704ed6a",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -3010,6 +3067,12 @@
     },
     {
       "from": "src/import/document.ts",
+      "to": "src/import/ocr.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/document.ts",
       "to": "src/import/parse.ts",
       "relation": "imports",
       "resolved": true
@@ -3017,11 +3080,6 @@
     {
       "from": "src/import/document.ts",
       "to": "exceljs",
-      "relation": "external"
-    },
-    {
-      "from": "src/import/document.ts",
-      "to": "tesseract.js",
       "relation": "external"
     },
     {
@@ -3111,6 +3169,11 @@
     {
       "from": "src/import/load-list.ts",
       "to": "exceljs",
+      "relation": "external"
+    },
+    {
+      "from": "src/import/ocr.ts",
+      "to": "onnxruntime-web",
       "relation": "external"
     },
     {
@@ -3196,11 +3259,6 @@
       "to": "src/import/schematic.ts",
       "relation": "imports",
       "resolved": true
-    },
-    {
-      "from": "src/import/schematic-read.ts",
-      "to": "tesseract.js",
-      "relation": "external"
     },
     {
       "from": "src/import/schematic.ts",
@@ -4295,6 +4353,12 @@
     },
     {
       "from": "tests/loads.test.ts",
+      "to": "src/import/ocr.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/loads.test.ts",
       "to": "src/import/parse.ts",
       "relation": "imports",
       "resolved": true
@@ -4513,10 +4577,60 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-19T02:31:01.968Z",
+  "updatedAt": "2026-11-19T07:52:31.802Z",
   "history": [
     {
-      "at": "2026-11-18T17:30:30.808Z",
+      "at": "2026-11-19T07:36:51.419Z",
+      "added": [],
+      "modified": [
+        "tests/loads.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:36:58.336Z",
+      "added": [],
+      "modified": [
+        "src/import/rating-table.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:36:59.129Z",
+      "added": [],
+      "modified": [
+        "src/import/rating-table.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:40:12.310Z",
+      "added": [],
+      "modified": [
+        "src/import/drawing-ocr.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:42:42.635Z",
+      "added": [],
+      "modified": [
+        "src/import/drawing-ocr.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:43:59.577Z",
+      "added": [],
+      "modified": [
+        "src/import/drawing-ocr.ts",
+        "src/import/raster.ts",
+        "tests/drawing.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:45:29.637Z",
       "added": [],
       "modified": [
         "AGENTS.md",
@@ -4525,7 +4639,7 @@
       "removed": []
     },
     {
-      "at": "2026-11-18T17:30:31.517Z",
+      "at": "2026-11-19T07:45:48.268Z",
       "added": [],
       "modified": [
         "docs/verification.json"
@@ -4533,98 +4647,31 @@
       "removed": []
     },
     {
-      "at": "2026-11-18T17:36:35.522Z",
+      "at": "2026-11-19T07:47:06.013Z",
       "added": [],
       "modified": [
-        "src/import/webpage.ts",
-        "src/ui/Catalogue.tsx",
+        ".gitignore"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:47:18.181Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T07:52:19.719Z",
+      "added": [],
+      "modified": [
         "tests/loads.test.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-18T17:36:36.303Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T01:29:27.048Z",
-      "added": [],
-      "modified": [
-        "src/import/document.ts",
-        "src/import/equipment.ts",
-        "src/import/parse.ts",
-        "src/import/rating-table.ts",
-        "src/import/webpage.ts",
-        "src/ui/Catalogue.tsx",
-        "src/ui/app.css",
-        "tests/loads.test.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T01:29:27.892Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T01:31:55.998Z",
-      "added": [],
-      "modified": [
-        "src/ui/Catalogue.tsx",
-        "src/ui/app.css"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T01:33:34.673Z",
-      "added": [],
-      "modified": [
-        "src/ui/Catalogue.tsx"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T01:35:19.072Z",
-      "added": [],
-      "modified": [
-        "AGENTS.md",
-        "docs/project-knowledge.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T01:35:19.792Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T02:31:01.152Z",
-      "added": [
-        "src/import/vocabulary.ts"
-      ],
-      "modified": [
-        "AGENTS.md",
-        "docs/project-knowledge.json",
-        "src/import/document.ts",
-        "src/import/equipment.ts",
-        "src/import/parse.ts",
-        "src/import/rating-table.ts",
-        "tests/loads.test.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T02:31:01.968Z",
+      "at": "2026-11-19T07:52:31.802Z",
       "added": [],
       "modified": [
         "docs/verification.json"

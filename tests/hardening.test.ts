@@ -114,6 +114,6 @@ describe('hosting security headers',()=>{
  });
  it('sends the same protective headers from both hosts',()=>{
   for(const [k,v] of Object.entries(vercelAll))if(k!=='Content-Security-Policy')expect(cloudflare).toContain(`${k}: ${v}\n`);
-  expect(Object.keys(vercelAll)).toEqual(expect.arrayContaining(['Strict-Transport-Security','X-Frame-Options','X-Content-Type-Options','Referrer-Policy','Cross-Origin-Opener-Policy','Permissions-Policy']));
+  expect(Object.keys(vercelAll)).toEqual(expect.arrayContaining(['Strict-Transport-Security','X-Frame-Options','X-Content-Type-Options','Referrer-Policy','Cross-Origin-Opener-Policy','Cross-Origin-Embedder-Policy','Permissions-Policy']));
  });
 });

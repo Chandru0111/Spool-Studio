@@ -1,9 +1,8 @@
-import {createWorker,type Worker} from 'tesseract.js';
 import {dxfTokens,extractLoadList,SCHEMATIC_LIMITS,type SchematicResult,type Token} from './schematic';
 import {readDrawingImage,traceLines,tokenBox,scaleGeometry,type Word} from './drawing-ocr';
 import type {Geometry,Rgba} from './raster';
 import {checkImage,MAX_IMAGE_SIDE as MAX_SIDE,MAX_IMAGE_PIXELS as MAX_PIXELS} from './guard';
-import type {Progress} from './document';
+import {ocrReader,type Progress} from './document';
 
 // Reads a schematic in the browser. PDF: the text layer, with the page rendered to trace busbars and feeders (scanned
 // pages are read with OCR). Images: cleaned up, read with OCR in three orientations and traced. DXF: text and attributes.
@@ -22,17 +21,13 @@ export async function readSchematic(file:File,onProgress:(p:Progress)=>void,sign
  if(ext==='dwg')throw Error('DWG is a closed CAD format. Save the drawing as DXF (ASCII) or plot it to PDF, then import that.');
  if(!['pdf','dxf','png','jpg','jpeg','webp'].includes(ext))throw Error('Use a PDF, DXF, PNG, JPG or WebP schematic.');
  const check=()=>{if(signal.aborted)throw Error('Import cancelled.');};
- let worker:Worker|undefined,ocrPages=0,percent=0;
- const stop=()=>{void worker?.terminate();};signal.addEventListener('abort',stop);
+ let reader:Awaited<ReturnType<typeof ocrReader>>|undefined,ocrPages=0,percent=0;
  const say=(message:string)=>onProgress({message,percent});
- const scratch=document.createElement('canvas');
- // Tesseract in sparse-text mode suits drawings: labels are scattered, not paragraphs.
+ // PaddleOCR finds each label wherever it sits on the sheet; its confidence (0–1) is given as a percentage like the rest.
  const recognise=async(img:Rgba,label:string):Promise<Word[]>=>{
-  worker??=await createWorker('eng',1,{workerPath:new URL('vendor/ocr/worker.min.js',location.href).href,corePath:new URL('vendor/ocr/',location.href).href,langPath:new URL('vendor/ocr/',location.href).href,workerBlobURL:false});
-  await worker.setParameters({tessedit_pageseg_mode:'11' as never});check();
-  scratch.width=img.width;scratch.height=img.height;const ctx=scratch.getContext('2d');if(!ctx)throw Error('This browser cannot prepare the drawing for reading.');const frame=ctx.createImageData(img.width,img.height);frame.data.set(img.data);ctx.putImageData(frame,0,0);
-  say(`Reading ${label}`);const {data}=await worker.recognize(scratch,{},{blocks:true});check();
-  return (data.blocks??[]).flatMap(b=>b.paragraphs.flatMap(p=>p.lines.flatMap(l=>l.words))).slice(0,8000).map(w=>({text:w.text,confidence:w.confidence,bbox:w.bbox}));
+  reader??=await ocrReader();check();say(`Reading ${label}`);
+  const {words}=await reader.read(img,check,()=>undefined);
+  return words.slice(0,8000).map(w=>({text:w.text,confidence:Math.round(w.score*100),bbox:w.bbox}));
  };
  const draw=(source:CanvasImageSource,w:number,h:number,scale:number)=>{const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));const ctx=canvas.getContext('2d');if(!ctx)throw Error('This browser cannot prepare the drawing for reading.');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(source,0,0,canvas.width,canvas.height);return canvas;};
  try {
@@ -85,5 +80,5 @@ export async function readSchematic(file:File,onProgress:(p:Progress)=>void,sign
   if(!tokens.length)throw Error('No readable text was found in this drawing. Try a clearer scan or a PDF exported from CAD.');
   const result=extractLoadList(tokens,geometry);percent=100;say(`${result.candidates.length} circuits found`);
   return {...result,file:file.name,pages,ocrPages,text:text.slice(0,400)};
- } finally {signal.removeEventListener('abort',stop);scratch.width=0;scratch.height=0;await worker?.terminate();}
+ } finally {await reader?.close();}
 }
