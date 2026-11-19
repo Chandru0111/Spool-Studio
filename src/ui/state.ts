@@ -6,7 +6,7 @@ import { selectedDrumOption,loadListGroups } from '../engine/procurement';
 import { planDrums,parseRuns } from '../engine/drums';
 import { calculateRow,clip,emptyRow,type InputCol,type SheetRow } from '../engine/sheet';
 import { suggestSheet,acceptSuggestions,defaultSuggestions,type SuggestDefaults } from '../engine/suggest';
-import { autosaveProject,forgetDeviceCopy,restoreProject } from '../store/project';
+import { autosaveProject,clearSavedProject,forgetDeviceCopy,restoreProject } from '../store/project';
 import { exportSheet,panelSheets } from '../export/template';
 // A neutral starting workspace; reference workbooks are examples, not the user's project.
 export const fresh=():Project=>Project.parse({schemaVersion:2,sheetLayout:8,name:'Untitled project',single:emptyRow(),list:{rows:[],source:'',defaults:{...defaultSuggestions}},drum:{...defaultDrum},cable:{odMm:29.2,kgKm:1850,minBendRadiusXOd:6},runs:'',demoGeometry:true,loads:{panels:[],catalogue:[],source:''}});
@@ -57,9 +57,15 @@ export function notify(message:string):void {toast.value=message;clearTimeout(ti
 export async function exportExcel(rows:readonly SheetRow[],suffix:string):Promise<void> {if(exporting.value)return;exporting.value=true;try{await exportSheet(rows,`${project.value.name} ${suffix}`);const {panels,chained}=panelSheets(rows);notify(panels.length?`Exported ${panels.length} panels, one Cable Sizing sheet each. Formulas and dropdowns stay live in Excel.`:chained?`Exported on one sheet: ${chained} row${chained===1?' feeds':'s feed'} another panel in the list, and Excel chains total VD within one sheet only.`:'Exported into the Cable Sizing workbook. Formulas and dropdowns stay live in Excel.');}catch(e){notify(e instanceof Error?e.message:'Export failed.');}finally{exporting.value=false;}}
 // Names the part of the project that failed validation, so the message points at the right input.
 export function saveProblem(e:unknown):string {const path=e instanceof ZodError?e.issues[0]?.path??[]:[];return path[0]==='drum'||path[0]==='cable'?'check drum inputs':path[0]==='list'||path[0]==='single'?'a sheet cell is too long':path[0]==='name'?'check the project name':path[0]==='runs'?'the typed cable runs are too long':path.length?`check ${path.join(' › ')}`:'browser storage unavailable';}
+let debounce:ReturnType<typeof setTimeout>,stopAutosave:(()=>void)|undefined;
+export function clearTabData():void {
+ clearSavedProject();
+ stopAutosave?.();clearTimeout(debounce);
+ past.length=0;future.length=0;lastKey='';project.value=fresh();syncHistory();
+}
 export async function initializeStore():Promise<void> {
   forgetDeviceCopy();
   try {const saved=await restoreProject();if(saved){project.value=saved;saveStatus.value='Saved in this tab';}}catch{saveStatus.value='Autosave unavailable';}
   let restored=true;
-  let debounce:ReturnType<typeof setTimeout>;effect(()=>{const snapshot=project.value;if(restored){restored=false;return;}saveStatus.value='Saving…';clearTimeout(debounce);debounce=setTimeout(()=>{void autosaveProject(snapshot).then(()=>{saveStatus.value='Saved in this tab';}).catch((e:unknown)=>saveStatus.value=`Not saved: ${saveProblem(e)}`);},450);});
+  stopAutosave=effect(()=>{const snapshot=project.value;if(restored){restored=false;return;}saveStatus.value='Saving…';clearTimeout(debounce);debounce=setTimeout(()=>{void autosaveProject(snapshot).then(()=>{saveStatus.value='Saved in this tab';}).catch((e:unknown)=>saveStatus.value=`Not saved: ${saveProblem(e)}`);},450);});
 }

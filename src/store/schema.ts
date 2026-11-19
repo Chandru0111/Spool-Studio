@@ -40,7 +40,7 @@ const toStep08=(r:unknown)=>{if(!r||typeof r!=='object'||Array.isArray(r))return
  for(const [k,v] of Object.entries(r as Record<string,unknown>)){const to=LEGACY_FAULT[k];if(to&&typeof v==='string'&&(v.trim()||o[to]===undefined))o[to]=v;}
  return o;};
 const migrate=(p:unknown)=>{if(!p||typeof p!=='object'||Array.isArray(p)||(p as {sheetLayout?:unknown}).sheetLayout===8)return p;const o={...(p as Record<string,unknown>)},list=o.list as {rows?:unknown}|undefined;
- o.single=toStep08(o.single);if(list&&typeof list==='object'&&Array.isArray(list.rows))o.list={...list,rows:list.rows.map(toStep08)};o.sheetLayout=8;return o;};
+ o.single=toStep08(o.single);if(list&&typeof list==='object'&&Array.isArray(list.rows)&&list.rows.length<=2000)o.list={...list,rows:list.rows.map(toStep08)};o.sheetLayout=8;return o;};
 const cells=<K extends string>(keys:readonly K[])=>z.object(Object.fromEntries(keys.map(k=>[k,z.string().max(MAX_CELL).default('')])) as Record<K,z.ZodDefault<z.ZodString>>);
 export const LoadRowData=cells<LoadKey>(LOAD_KEYS);
 export const CatalogueRowData=cells<CatalogueKey>(CATALOGUE_KEYS);
@@ -48,7 +48,7 @@ const factor=z.string().max(20);
 export const LoadPanel=z.object({name:z.string().max(60).default('Panel'),rows:z.array(LoadRowData).max(500).default([]),factors:z.object({C:factor,I:factor,S:factor}).default({...DEFAULT_FACTORS}),margin:factor.default(DEFAULT_MARGIN)});
 export type LoadPanel=z.infer<typeof LoadPanel>;
 // The equipment load list and the brand catalogue it draws on. Projects saved before it existed start with an empty one.
-export const Loads=z.object({panels:z.array(LoadPanel).max(50).default([]),catalogue:z.array(CatalogueRowData).max(5000).default([]),source:z.string().max(300).default('')}).default({});
+export const Loads=z.object({panels:z.array(LoadPanel).max(50).default([]),catalogue:z.array(CatalogueRowData).max(5000).default([]),source:z.string().max(300).default('')}).prefault({});
 export type Loads=z.infer<typeof Loads>;
 export const SuggestDefaults=z.object({cableType:z.string().max(300),cores3:z.string().max(300),cores1:z.string().max(300),method:z.string().max(300),vdPct:z.string().max(300)});
 export const BendGuidance=z.object({type:z.enum(['','single','multi','armoured','fire','fire-armoured']).default(''),installation:z.string().max(30).default(''),fixed:z.string().max(30).default(''),source:z.string().max(500).default('')}).default({type:'',installation:'',fixed:'',source:''});

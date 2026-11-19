@@ -4,10 +4,10 @@ import {cleanValue} from './load-list';
 import type {Candidate} from './schematic';
 
 // Optional AI reading of drawing text by a model running on the user's own computer (Ollama or LM Studio, OpenAI-style API).
-// Nothing leaves the machine. The AI only proposes values: a value is kept only when its quote is found in the drawing text
+// The browser contacts a loopback service. The AI only proposes values: a value is kept only when its quote is found in the drawing text
 // and the value itself appears in that quote, so nothing the drawing does not say (cable length included) reaches the sheet.
 // The sheet engine still does every calculation.
-export type AiSettings={url:string;model:string};
+export type AiSettings={url:string;model:string;lmLinkOff?:boolean};
 export const AI_DEFAULT:AiSettings={url:'http://127.0.0.1:11434/v1',model:''};
 export const AI_MAX_CHARS=60000;
 const FIELDS:[string,InputCol][]=[['from','C'],['to','D'],['phases','E'],['voltage','F'],['kw','G'],['pf','I'],['breakerA','N'],['cores','P'],['sizeMm2','AC'],['cables','AD'],['lengthM','AH']];
@@ -40,18 +40,26 @@ export function aiCandidates(content:string,text:readonly string[]):{candidates:
 }
 
 const base=(s:AiSettings)=>s.url.trim().replace(/\/$/,'');
-const call=async(url:string,init:RequestInit)=>{
- if(!isLocalUrl(url.replace(/\/(models|chat\/completions)$/,'')))throw Error('AI reading only talks to a model on this computer: Ollama (http://127.0.0.1:11434/v1) or LM Studio (http://127.0.0.1:1234/v1).');
- try{return await fetch(url,init);}catch{throw Error('No local model answered. Start Ollama (or LM Studio\'s server) and allow this site in its settings.');}
+const call=async(s:AiSettings,route:'/v1/models'|'/v1/chat/completions'|'/api/status',init:RequestInit={})=>{
+ if(!isLocalUrl(s.url))throw Error('AI reading only talks to a model on this computer: Ollama (http://127.0.0.1:11434/v1) or LM Studio (http://127.0.0.1:1234/v1).');
+ try{return await fetch(new URL(route,base(s)).href,{...init,redirect:'error',credentials:'omit',referrerPolicy:'no-referrer',cache:'no-store'});}catch{throw Error('No local model answered. Start Ollama (or LM Studio\'s server) and allow this site in its settings.');}
 };
 export async function aiModels(s:AiSettings):Promise<string[]> {
- const res=await call(`${base(s)}/models`,{});if(!res.ok)throw Error(`The local model server answered ${res.status}.`);
+ const res=await call(s,'/v1/models');if(!res.ok)throw Error(`The local model server answered ${res.status}.`);
  const body=await res.json() as {data?:{id?:unknown}[]};return (body.data??[]).map(m=>m.id).filter((id):id is string=>typeof id==='string');
 }
 export type ChatTurn={role:'system'|'user'|'assistant';content:string};
 async function chat(s:AiSettings,messages:readonly ChatTurn[],signal?:AbortSignal):Promise<string> {
  if(!s.model)throw Error('Pick a local model first.');
- const res=await call(`${base(s)}/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},...(signal?{signal}:{}),
+ // Verify privacy before putting any project text into a network request, including for a remembered model.
+ if(isLocalUrl(s.url)&&new URL(base(s)).port==='1234'){
+  if(!s.lmLinkOff)throw Error('Turn off LM Link and select a downloaded model on this device, then confirm the setting.');
+ }else{
+  const status=await call(s,'/api/status',signal?{signal}:{});
+  const info=status.ok?await status.json().catch(()=>null):null;
+  if(info?.cloud?.disabled!==true)throw Error('Ollama must report local-only mode. Set OLLAMA_NO_CLOUD=1 and restart Ollama. Update Ollama if its status is unavailable.');
+ }
+ const res=await call(s,'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},...(signal?{signal}:{}),
   body:JSON.stringify({model:s.model,temperature:0,messages})});
  if(!res.ok)throw Error(`The local model answered ${res.status}. Check the model name.`);
  const content=(await res.json() as {choices?:{message?:{content?:unknown}}[]}).choices?.[0]?.message?.content;

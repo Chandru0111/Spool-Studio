@@ -3,6 +3,11 @@
 public/
 docs/verification.json
 samples/
+tmp/
+dist/
+.dist/
+outputs/
+node_modules/
 src/data/
 tests/fixtures/
 spool-studio.dkg

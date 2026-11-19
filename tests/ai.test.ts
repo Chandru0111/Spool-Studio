@@ -1,4 +1,4 @@
-import {describe,it,expect} from 'vitest';
+import {describe,it,expect,vi,afterEach} from 'vitest';
 import {aiCandidates,askAi,isLocalUrl,listBrief,parseAdvice,askAdvice} from '../src/import/ai';
 import {readPanels} from '../src/import/panels';
 import {suggestSheet,defaultSuggestions} from '../src/engine/suggest';
@@ -7,6 +7,7 @@ import {findIssues} from '../src/engine/issues';
 // Synthetic drawing text and scripted AI replies: no model runs in tests.
 const text=['MSB-01 400/230V 3PH','OUTGOING TO DB-L1 63A TPN MCCB 4C x 16mm2 Cu/XLPE/SWA/PVC L=60m','TO PUMP P-101 40A TPN 7.5kW'];
 const reply=(circuits:unknown[])=>`Here you go: ${JSON.stringify({circuits})}`;
+afterEach(()=>vi.unstubAllGlobals());
 
 describe('AI reading of drawing text',()=>{
  it('keeps only values found in a quote that is really in the drawing',()=>{
@@ -32,6 +33,22 @@ describe('AI reading of drawing text',()=>{
   expect(isLocalUrl('https://integrate.api.nvidia.com/v1')).toBe(false);
   expect(isLocalUrl('http://127.0.0.1:8080/v1')).toBe(false);
   await expect(askAi({url:'https://integrate.api.nvidia.com/v1',model:'x'},text)).rejects.toThrow(/only talks to a model on this computer/);
+ });
+ it.each([false,null])('withholds document text when Ollama local-only mode is %s',async(disabled)=>{
+  const request=vi.fn().mockResolvedValue(Response.json({cloud:{disabled}}));vi.stubGlobal('fetch',request);
+  await expect(askAi({url:'http://127.0.0.1:11434/v1',model:'saved'},text)).rejects.toThrow(/local-only/);
+  expect(request.mock.calls).toEqual([['http://127.0.0.1:11434/api/status',{redirect:'error',credentials:'omit',referrerPolicy:'no-referrer',cache:'no-store'}]]);
+ });
+ it('sends the prompt only after the local-only check and refuses redirects on the POST',async()=>{
+  const request=vi.fn().mockResolvedValueOnce(Response.json({cloud:{disabled:true}})).mockResolvedValueOnce(Response.json({choices:[{message:{content:reply([])}}]}));vi.stubGlobal('fetch',request);
+  await askAi({url:'http://localhost:11434/v1',model:'local'},text);
+  expect(request).toHaveBeenNthCalledWith(2,'http://localhost:11434/v1/chat/completions',expect.objectContaining({method:'POST',redirect:'error',credentials:'omit',body:expect.stringContaining('P-101')}));
+ });
+ it('requires confirmation of on-device LM Studio routing before sending a prompt',async()=>{
+  const request=vi.fn().mockResolvedValueOnce(Response.json({choices:[{message:{content:reply([])}}]}));vi.stubGlobal('fetch',request);
+  const settings={url:'http://localhost:1234/v1',model:'downloaded'};
+  await expect(askAi(settings,text)).rejects.toThrow(/LM Link/);expect(request).not.toHaveBeenCalled();
+  await askAi({...settings,lmLinkOff:true},text);expect(request).toHaveBeenCalledTimes(1);
  });
 });
 

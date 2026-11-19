@@ -26,7 +26,7 @@ export function Assistant({onClose}:{onClose:()=>void}) {
   setListRows(rows);setFixes(fixes.filter(f=>!f.on));notify(`${n} change${n===1?'':'s'} applied. Undo with Ctrl+Z.`);}
  return <section class="panel assistant" aria-label="Ask about this load list">
   <div class="assistant-head"><b><MessageSquare size={15}/>Ask about this load list</b><div class="inline-actions">{picker}<button class="icon-button" aria-label="Close assistant" onClick={onClose}><X size={15}/></button></div></div>
-  <p class="muted">A model on this computer reads a summary of this sheet: the panels, what feeds what, every row's results and its issues. It explains and may propose changes; nothing changes until you tick and apply them. It never sets cable runs, and nothing leaves the machine.</p>
+  <p class="muted">Asking a question sends the panel connections, row results and issues to your selected model server on this device. Review and apply the changes you want to keep.</p>
   {turns.length>0&&<ol class="assistant-turns">{turns.map((t,k)=><li key={k} class={t.role}>{t.content}</li>)}</ol>}
   {fixes.length>0&&<div class="assistant-fixes"><b>Proposed changes</b><ul>{fixes.map((f,k)=><li key={k}><label><input type="checkbox" checked={f.on} onChange={e=>{const on=e.currentTarget.checked;setFixes(fixes.map((x,j)=>j===k?{...x,on}:x));}}/><span>Row {f.row} ({f.to||'no To'}) · {f.col} → <i>{f.value}</i>{f.why&&<small> · {f.why}</small>}</span></label></li>)}</ul>
    <button class="button primary small" disabled={!fixes.some(f=>f.on)} onClick={apply}><Check size={14}/>Apply ticked</button></div>}

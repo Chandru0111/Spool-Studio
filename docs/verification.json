@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-11-18T08:15:25.064Z",
-  "sourceFingerprint": "83913e0ea673b7f1923a2e6ca125a739eaa6efee07ae0d7048e5ef664f28fd72",
+  "checkedAt": "2026-11-19T02:31:01.906Z",
+  "sourceFingerprint": "d91c7bccd4dea97015c08c1035e17dbd173f6ca8211bff12caf0b1b3f6f4ae51",
   "status": "passed",
   "steps": [
     {
@@ -11,17 +11,17 @@
     {
       "command": "npm run test",
       "exitCode": 0,
-      "summary": "Test Files  11 passed (11); Tests  114 passed (114)"
+      "summary": "Test Files  12 passed (12); Tests  138 passed (138)"
     },
     {
       "command": "npm run build",
       "exitCode": 0,
-      "summary": "Passed"
+      "summary": "Verified 211 asset hashes (PDF, OCR, fonts and blank workbook) and the release file list."
     },
     {
       "command": "npm run verify:vendor",
       "exitCode": 0,
-      "summary": "Verified 204 local PDF/OCR asset checksums."
+      "summary": "Verified 211 asset hashes (PDF, OCR, fonts and blank workbook) and the release file list."
     }
   ]
 }

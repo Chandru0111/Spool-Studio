@@ -24,7 +24,7 @@ const numeric=new Set(['sizeMm2','itA','mvAm','odMm','kgKm','minBendRadiusXOd','
 export function parseTable(cells:string[][],name:string):Rating[] {
   if(cells.length<2)throw Error('The table needs a header and at least one cable row.');
   if(cells.length>5001)throw Error('A catalogue is limited to 5,000 extracted rows.');
-  const fields=(cells[0]??[]).map(s=>aliases[normalize(s)]);
+  const fields=(cells[0]??[]).map(s=>{const k=normalize(s);return Object.hasOwn(aliases,k)?aliases[k]:undefined;});
   if(!fields.includes('sizeMm2')||!fields.includes('cableType')) throw Error('Include cableType and sizeMm2 headers. Download the example CSV for supported columns.');
   const result:Rating[]=[];
   for(const [index,cellsRow] of cells.slice(1).entries()) {
@@ -84,7 +84,20 @@ export function extractCandidates(pages:PageEvidence[],name:string):Rating[] {
   return rows;
 }
 
-export type PositionedLine={cells:{x:number;text:string}[]};
+export type PositionedLine={y?:number;cells:{x:number;w?:number;h?:number;y?:number;text:string}[]};
+// OCR words in the text layer's terms, so the table reader reads a scan as it reads a typed PDF: each word's box turned
+// into page points by toPoint (pixel x, y from the top left in; PDF x, y from the bottom left out), words at one height
+// gathered into a line, and words a space apart into one item ("Rated Power", "AXR 315MB2").
+export function ocrLines(words:readonly {text:string;bbox:{x0:number;y0:number;x1:number;y1:number}}[],toPoint:(x:number,y:number)=>number[]):PositionedLine[] {
+  const items=words.filter(w=>w.text.trim()).map(w=>{const [x0=0,y0=0]=toPoint(w.bbox.x0,w.bbox.y1),[x1=0,y1=0]=toPoint(w.bbox.x1,w.bbox.y0);return {x:x0,w:x1-x0,h:y1-y0,y:y0,text:w.text.trim()};}).sort((a,b)=>b.y+b.h/2-(a.y+a.h/2));
+  const lines:(typeof items)[]=[];
+  for(const it of items){const l=lines.at(-1),first=l?.[0];if(l&&first&&Math.abs(it.y+it.h/2-(first.y+first.h/2))<=Math.max(it.h,first.h)/2)l.push(it);else lines.push([it]);}
+  return lines.map(l=>{
+    const cells:(typeof items)=[];
+    for(const it of l.sort((a,b)=>a.x-b.x)){const prev=cells.at(-1);if(prev&&it.x-(prev.x+prev.w)<0.5*Math.max(it.h,prev.h))Object.assign(prev,{w:it.x+it.w-prev.x,h:Math.max(prev.h,it.h),y:Math.min(prev.y,it.y),text:`${prev.text} ${it.text}`});else cells.push({...it});}
+    return {y:cells[0]!.y,cells};
+  });
+}
 /** Conservative, explicit single-row headers. Multi-level/ambiguous headers stay manual. */
 export function extractPositionedTable(lines:PositionedLine[],page:number,name:string):Rating[] {
   type NumericField='sizeMm2'|'odMm'|'kgKm'|'itA'|'mvAm';

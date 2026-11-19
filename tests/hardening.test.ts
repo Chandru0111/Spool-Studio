@@ -6,7 +6,7 @@ import {suggestSheet,defaultSuggestions} from '../src/engine/suggest';
 import {findIssues} from '../src/engine/issues';
 import {fillTemplate} from '../src/export/template';
 import {toSheetRows,detectColumns,cleanValue,readTables} from '../src/import/load-list';
-import {parseDelimited} from '../src/import/parse';
+import {parseDelimited,parseTable} from '../src/import/parse';
 import {Project,SheetRowData} from '../src/store/schema';
 import {openProject} from '../src/store/project';
 
@@ -24,6 +24,11 @@ describe('export cannot be corrupted by extreme inputs',()=>{
   const xml=await sheetXml(await fillTemplate(template(),[row({D:'P￾-\uD800x\u0001y'})]));
   expect(xml).toContain('<t>P-xy</t>');expect(xml).not.toMatch(/[￾￿\uD800-\uDFFF\u0001]/);
  });
+  it('keeps a panel name with $ signs as written',async()=>{
+   // String replace() reads $' and $& in a replacement as patterns; a panel called "A$'B" once broke the sheet list.
+   const book=await (await JSZip.loadAsync(await fillTemplate(template(),[row({C:"A$'B$&"}),row({C:'MSB-2',D:'P-2'})]))).file('xl/workbook.xml')!.async('string');
+   expect(book).toContain(`<sheet name="A$'B$&amp;"`);expect(book).toContain('<sheet name="MSB-2"');
+  });
 });
 
 describe('numbers follow Excel, not JavaScript',()=>{
@@ -41,12 +46,14 @@ describe('imported and pasted text stays within what a backup can hold',()=>{
  it('caps long imported text so autosave keeps working',()=>{
   const long='x'.repeat(5000),header=['Tag','From','kW'],rows=toSheetRows([header,[long,'MSB','5']],0,detectColumns(header));
   expect(rows[0]!.D.length).toBeLessThanOrEqual(300);
-  expect(Project.innerType().shape.list.shape.rows.safeParse(rows).success).toBe(true);
+  expect(SheetRowData.array().safeParse(rows).success).toBe(true);
   expect(cleanValue('D','y'.repeat(1000),emptyRow()).length).toBeLessThanOrEqual(300);
  });
  it('limits the size of a delimited file like a workbook',async()=>{
   expect(()=>parseDelimited(Array.from({length:10002},()=>'a,b').join('\n'))).toThrow(/10,000 rows/);
   expect(()=>parseDelimited(','.repeat(300))).toThrow(/200 columns/);
+  // Header names are looked up in a plain object; 'constructor' must not resolve to Object's own function.
+  expect(Object.keys(parseTable([['cableType','sizeMm2','constructor','toString'],['XLPE','16','x','y']],'t.csv')[0]!)).not.toContain('function Object() { [native code] }');
   await expect(readTables(new File([','.repeat(300)],'wide.csv'))).rejects.toThrow(/200 columns/);
  });
 });
@@ -92,5 +99,21 @@ describe('earth fault loop and short-circuit inputs',()=>{
   expect({AP:b.AP,AQ:b.AQ,AS:b.AS,AT:b.AT,AW:b.AW,AX:b.AX,AY:b.AY,BH:b.BH,BI:b.BI,BK:b.BK,BL:b.BL}).toEqual({AP:'',AQ:'0.3',AS:'MCB / RCBO Type C',AT:'500',AW:'Steel armour',AX:'62',AY:'1.2',BH:'25',BI:'36',BK:'0.2',BL:'15000'});
   // A step08 save is read as it is: its AS is the device, not an old CPC size.
   expect(Project.parse(JSON.parse(JSON.stringify(p)))).toEqual(p);expect(SheetRowData.parse({AS:'MCB / RCBO Type B'}).AS).toBe('MCB / RCBO Type B');
+ });
+});
+
+describe('hosting security headers',()=>{
+ // The page's meta CSP, the Cloudflare _headers file and vercel.json must carry the same policy, so a host never serves a weaker one.
+ const meta=fs.readFileSync('public/index.html','utf8').match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)![1]!;
+ const cloudflare=fs.readFileSync('public/_headers','utf8'),vercel=JSON.parse(fs.readFileSync('vercel.json','utf8')) as {headers:{source:string;headers:{key:string;value:string}[]}[]};
+ const vercelAll=Object.fromEntries(vercel.headers.find(h=>h.source==='/(.*)')!.headers.map(h=>[h.key,h.value]));
+ it('serves the page CSP plus frame-ancestors from both hosts',()=>{
+  const full=`${meta}; frame-ancestors 'none'`;
+  expect(cloudflare).toContain(`Content-Security-Policy: ${full}\n`);expect(vercelAll['Content-Security-Policy']).toBe(full);
+  expect(meta).not.toMatch(/'(?:unsafe-inline|unsafe-eval)'/);
+ });
+ it('sends the same protective headers from both hosts',()=>{
+  for(const [k,v] of Object.entries(vercelAll))if(k!=='Content-Security-Policy')expect(cloudflare).toContain(`${k}: ${v}\n`);
+  expect(Object.keys(vercelAll)).toEqual(expect.arrayContaining(['Strict-Transport-Security','X-Frame-Options','X-Content-Type-Options','Referrer-Policy','Cross-Origin-Opener-Policy','Permissions-Policy']));
  });
 });

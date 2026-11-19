@@ -2,11 +2,14 @@ import {describe,it,expect} from 'vitest';
 import ExcelJS from 'exceljs';
 import {balance,emptyEntry,emptyLoad,fillRow,indexCatalogue,panelTotals,plantTotals,scenario,type LoadRow} from '../src/engine/loads';
 import {readTables} from '../src/import/load-list';
-import {catalogueFromPages,mergeSizing,parseEquipmentReply,readEquipment,toSizing,verify} from '../src/import/equipment';
+import {catalogueFromPages,locate,mergeSizing,parseEquipmentReply,readEquipment,toSizing,verify} from '../src/import/equipment';
 import {emptyRow} from '../src/engine/sheet';
 import {Project} from '../src/store/schema';
 import {fresh} from '../src/ui/state';
 import {loadsBook} from '../src/export/equipment';
+import {catalogueFromDatasheet,catalogueFromWeb,pageText,redirectTarget} from '../src/import/webpage';
+import {catalogueFromTables} from '../src/import/rating-table';
+import {ocrLines} from '../src/import/parse';
 import {equipmentLayout,writeEquipmentRows,writeEquipmentSummary} from '../src/export/equipment-layout';
 
 // Made-up equipment and brands only.
@@ -148,6 +151,164 @@ describe('importing an equipment workbook',()=>{
  });
 });
 
+describe('reading a pasted vendor web page',()=>{
+ // Made-up page in the usual shapes: a "Label: value" header, a spec grid with two pairs per row, a label line above its value, a comparison table.
+ const html=`<head><title>t</title></head><script>alert(1)</script><div>Item: ZX99 | Model: M-100 | Cross Ref: Q-7</div><div>Brand</div><div>Acme &amp; Co</div>
+ <table><tr><th>Hp</th><td>7 1/2 hp</td><th>Frequency</th><td>60 Hz</td></tr><tr><th>Full Load Amps</th><td>19.8-22.5A</td><th>Phase</th><td>1</td></tr>
+ <tr><th>Efficiency</th><td>82.5%</td><th>Nominal Efficiency</th><td>88.5%</td></tr></table><div>Voltage</div><div>208-230V AC</div>
+ <table><tr><th>Model</th><th>Voltage</th><th>Hp</th><th>Full Load Amps</th></tr><tr><td>M-200</td><td>400V</td><td>5.5 kW</td><td>11 A</td></tr></table>`;
+ it('keeps table cells apart and drops scripts',()=>{
+  const t=pageText(html);expect(t).not.toContain('alert');expect(t).toContain('Hp\t7 1/2 hp\tFrequency\t60 Hz');expect(t).toContain('Acme & Co');
+ });
+ it('reads label/value pairs, converts horsepower and keeps ranges as written',()=>{
+  const {proposals,brand}=catalogueFromWeb(pageText(html),'https://vendor.example/m-100');
+  expect(brand).toBe('Acme & Co');expect(proposals).toHaveLength(2);
+  const [main,other]=proposals;
+  expect(main!.entry).toMatchObject({model:'M-100',ratedKw:'5.593',inA:'19.8-22.5',un:'208-230 V',efficiency:'0.825',config:'208-230 V, 1-phase, 60 Hz',source:'https://vendor.example/m-100 (web page)'});
+  expect(main!.include).toBe(true);expect(main!.unverified).toEqual([]);expect(main!.evidence).toContain('7 1/2 hp = 5.593 kW');
+  // The unit written with the value wins over an "Hp" heading; other models on a product page start unticked.
+  expect(other!.entry).toMatchObject({model:'M-200',ratedKw:'5.5',inA:'11',un:'400 V'});expect(other!.include).toBe(false);
+ });
+});
+
+describe('saved links are not documents',()=>{
+ it('finds where a saved search-result page forwards to, and leaves real pages alone',()=>{
+  const stub=`<html><head><script>var redirectUrl='https://maker.example/cat.pdf';</script><noscript><meta content="0;url=https://maker.example/dl.aspx?id=9&amp;lang=en" http-equiv="refresh"></noscript></head></html>`;
+  expect(redirectTarget(stub)).toBe('https://maker.example/dl.aspx?id=9&lang=en');
+  expect(redirectTarget('<meta http-equiv="refresh" content="5;url=/next"><p>Rated power 5.5 kW</p>')).toBeNull();
+  expect(redirectTarget('<meta http-equiv="refresh" content="0;url=javascript:alert(1)">')).toBeNull();
+ });
+});
+
+describe('reading two-column datasheet PDFs',()=>{
+ // Made-up pages in the "label    value" layout PDF text keeps (two or more spaces between columns), with the traps real sheets have.
+ const page=(page:number,lines:string[])=>({page,text:lines.join('\n'),mode:'text' as const,confidence:null});
+ it('reads a maker\'s sheet: model heading, supply voltage range, copyright brand; skips signal inputs, classes and losses',()=>{
+  const {proposals:[p],brand}=catalogueFromDatasheet([page(1,['Data sheet     AB1234-5CD67-8EF9','  Acme MX20 monitoring device, Ue 230/400 V, 50 Hz','  Model','  product brand name     ACMELINE',
+   '  voltage curve     Sinusoidal','  Supply voltage','  input voltage at digital input at DC maximum     30 V','  supply voltage at AC     100 ... 250 V','  efficiency class     IE3',
+   '  power loss total typical     2 W']),page(2,['  height     96 mm','  Page 2/2     © Copyright Acme'])],'acme.pdf');
+  expect(brand).toBe('Acme');
+  expect(p!.entry).toMatchObject({model:'AB1234-5CD67-8EF9',un:'100-250 V',config:'100-250 V, 50 Hz',ratedKw:'',inA:'',efficiency:'',source:'acme.pdf, page 1'});
+  expect(p!.unverified).toEqual([]);
+ });
+ it('reads a printed shop page: split ligatures, wrapped labels, "|" separators, maker from the title',()=>{
+  const {proposals:[p],brand}=catalogueFromDatasheet([page(1,['Acme Motors QX-100 | General Purpose Motor | Shop Ltd','  Item:     Z9     |     Model:     QX-100',
+   '  Full Load    11.5A','  Amps    No. Of Speed     1','  E  ffi  ciency     91%','  Hp     5 hp','  ©     Shop Ltd.     All Rights Reserved'])],'shop.pdf');
+  expect(brand).toBe('Acme Motors');
+  expect(p!.entry).toMatchObject({model:'QX-100',inA:'11.5',efficiency:'0.91',ratedKw:'3.729'});expect(p!.unverified).toEqual([]);
+ });
+});
+
+describe('reading catalogue rating tables by column position',()=>{
+ // Made-up catalogue pages: [x, text, width] per item, the way the PDF text layer places them.
+ const line=(...cells:[number,string,number?][])=>({cells:cells.map(([x,text,w])=>({x,text,w:w??text.length*5}))});
+ const stacked=[line([40,'IE3 cast iron motors, 400 V 50 Hz',150]),line([40,'3000 r/min = 2 poles',100]),
+  line([40,'Output',30],[80,'Motor type',50],[150,'Product code',60],[220,'Efficiency',50],[285,'Power factor',30],[320,'Current',40],[380,'Torque',20]),
+  line([40,'kW',10],[220,'Full load',25],[250,'3/4 load',25],[285,'cos φ',20],[320,'IN',10],[350,'Is/IN',15],[380,'TN Nm',20]),
+  line([220,'100%',20],[250,'75%',15],[320,'A',5]),
+  line([40,'0.75'],[80,'M3BP 80MLA 2'],[150,'3GBP081321-B'],[220,'80.7'],[250,'79.2'],[285,'0.80'],[320,'1.65'],[350,'6.0'],[380,'2.5']),
+  line([40,'1.1'],[80,'M3BP 80MLB 2'],[150,'3GBP081322-B'],[220,'82.7'],[250,'82.1'],[285,'0.82'],[320,'2.35'],[350,'6.5'],[380,'3.7']),
+  line([40,'1500 r/min = 4 poles',100]),
+  line([40,'0.75'],[80,'M3BP 80MLB 4'],[150,'3GBP082322-B'],[220,'82.5'],[250,'81.9'],[285,'0.74'],[320,'1.8'],[350,'5.4'],[380,'5.0']),
+  line([40,'1.1'],[80,'M3BP 90SLA 4'],[150,'3GBP092321-B'],[220,'84.1'],[250,'84.0'],[285,'0.77'],[320,'2.45'],[350,'6.0'],[380,'7.4']),
+  line([40,'© Acme Drives 2026',80])];
+ it('reads stacked headings: model column, full-load efficiency, In not Is/In, poles from sub-headings',()=>{
+  const rows=catalogueFromTables(new Map([[7,stacked]]),'cat.pdf');
+  expect(rows.map(r=>r.entry)).toEqual([
+   expect.objectContaining({model:'M3BP 80MLA 2',ratedKw:'0.75',inA:'1.65',efficiency:'0.807',pf:'0.8',un:'400 V',config:'3GBP081321-B, 400 V, 50 Hz, 2-pole',source:'cat.pdf, page 7'}),
+   expect.objectContaining({model:'M3BP 80MLB 2',ratedKw:'1.1',inA:'2.35',efficiency:'0.827'}),
+   expect.objectContaining({model:'M3BP 80MLB 4',inA:'1.8',config:'3GBP082322-B, 400 V, 50 Hz, 4-pole'}),
+   expect.objectContaining({model:'M3BP 90SLA 4',ratedKw:'1.1',pf:'0.77'})]);
+  expect(rows.every(r=>r.unverified.length===0)).toBe(true);
+ });
+ it('reads kW and hp, current per voltage, percent power factor; the series over a frame-only table is the model',()=>{
+  const rows=catalogueFromTables(new Map([[3,[line([40,'AX series, 3~ 50 Hz',100]),
+   line([40,'Output',50],[100,'Frame',30],[150,'Speed',30],[200,'Current (A)',110],[330,'Eff. (%)',40],[390,'P.F. (%)',40]),
+   line([42,'kW',12],[66,'HP',12],[152,'rpm',16],[200,'380V',24],[240,'400V',24],[280,'415V',24]),
+   line([40,'0.75',16],[68,'1',6],[100,'80M',18],[150,'2850',20],[202,'1.9',12],[242,'1.8',12],[282,'1.75',16],[332,'80.7',16],[392,'82',10]),
+   line([40,'5.5',12],[66,'7.5',12],[100,'132S',22],[150,'1450',20],[202,'11.6',16],[242,'11.0',16],[282,'10.7',16],[332,'89.6',16],[392,'83',10])]]]),'ax.pdf');
+  expect(rows.map(r=>r.entry)).toEqual([
+   expect.objectContaining({model:'AX',ratedKw:'0.75',inA:'1.8',efficiency:'0.807',pf:'0.82',un:'400 V',config:'80M, 400 V, 3-phase, 50 Hz, 2-pole'}),
+   expect.objectContaining({model:'AX',ratedKw:'5.5',inA:'11',efficiency:'0.896',pf:'0.83',config:'132S, 400 V, 3-phase, 50 Hz, 4-pole'})]);
+  // With no name column the series printed over the table is the model and the frame size the configuration; nothing is made up.
+  expect(rows.every(r=>r.unverified.length===0)).toBe(true);
+ });
+ it('prefers catalogue rows over one product read from the whole file',()=>{
+  const pages=[{page:7,text:stacked.map(l=>l.cells.map(c=>c.text).join('  ')).join('\n'),mode:'text' as const,confidence:null}];
+  const {proposals,brand}=catalogueFromDatasheet(pages,'cat.pdf',new Map([[7,stacked]]));
+  expect(proposals).toHaveLength(4);expect(brand).toBe('Acme Drives');
+ });
+ // kW, In, efficiency and power factor must work out to the voltage: P = √3·U·I·η·cosφ.
+ it('takes the printed voltage the rows work out to, skips no-load current and flags rows that do not add up',()=>{
+  const rows=catalogueFromTables(new Map([[31,[line([40,'ZX motors, 3000 V, 50 Hz',120]),line([40,'1500 r/min = 4 poles 690 V 50 Hz',150]),
+   line([40,'Output',30],[100,'Motor type',50],[200,'Current',40],[260,'Efficiency',50],[330,'Power factor',40]),
+   line([40,'kW',10],[200,'I nl',15],[230,'IN',10],[260,'100%',20],[330,'cos φ',20]),
+   line([40,'250'],[100,'ZX 400L4'],[200,'20'],[230,'56'],[260,'95.5'],[330,'0.90']),
+   line([40,'315'],[100,'ZX 400M4'],[200,'25'],[230,'70'],[260,'95.9'],[330,'0.90']),
+   line([40,'355'],[100,'ZX 400N4'],[200,'27'],[230,'40'],[260,'96.0'],[330,'0.90'])]]]),'zx.pdf');
+  expect(rows.map(r=>[r.entry.inA,r.entry.config])).toEqual([['56','3000 V, 50 Hz, 4-pole'],['70','3000 V, 50 Hz, 4-pole'],['40','3000 V, 50 Hz, 4-pole']]);
+  expect(rows.slice(0,2).every(r=>!r.unverified.length&&!r.note)).toBe(true);
+  expect(rows[2]!.unverified).toEqual(expect.arrayContaining(['inA','un']));expect(rows[2]!.note).toMatch(/about 5931 V, not 3000 V/);
+ });
+ it('reads a single-phase table from its values when no phase is printed',()=>{
+  const rows=catalogueFromTables(new Map([[2,[line([40,'Capacitor motors 230 V 50 Hz',140]),
+   line([40,'kW',10],[100,'Type',20],[200,'In (A)',25],[260,'η %',15],[330,'cos φ',20]),
+   line([40,'0.37'],[100,'C71B4'],[200,'2.8'],[260,'61'],[330,'0.95']),
+   line([40,'0.55'],[100,'C80A4'],[200,'3.8'],[260,'64'],[330,'0.98'])]]]),'c.pdf');
+  expect(rows.map(r=>r.entry.config)).toEqual(['230 V, 1-phase, 50 Hz','230 V, 1-phase, 50 Hz']);
+  expect(rows.every(r=>!r.unverified.length)).toBe(true);
+ });
+ it('tells apart one model printed with other values on two pages, and drops a row printed twice',()=>{
+  const page=(a:string)=>[line([40,'400 V 50 Hz',60]),line([40,'kW',10],[100,'Frame',25],[200,'In (A)',25],[260,'η %',15],[330,'cos φ',20]),
+   line([40,'1.5'],[100,'90L4'],[200,a],[260,'79'],[330,'0.8']),line([40,'2.2'],[100,'100L4'],[200,'4.8'],[260,'84'],[330,'0.8'])];
+  const rows=catalogueFromTables(new Map([[1,page('3.4')],[2,page('3.2')]]),'f.pdf');
+  expect(rows.map(r=>[r.entry.model,r.entry.config])).toEqual([['90L4','400 V, 50 Hz, page 1'],['100L4','400 V, 50 Hz'],['90L4','400 V, 50 Hz, page 2']]);
+ });
+ it('tells apart one frame at several outputs by its kW; a type is the model and a numeric part number the configuration',()=>{
+  const rows=catalogueFromTables(new Map([[4,[line([40,'400 V 50 Hz',60]),line([40,'kW',10],[100,'Frame',25],[220,'In (A)',25],[280,'η %',15],[340,'cos φ',20]),
+   line([40,'45'],[100,'280M8'],[220,'89'],[280,'92'],[340,'0.79']),line([40,'55'],[100,'280M8'],[220,'107'],[280,'92.8'],[340,'0.8'])]],
+   [5,[line([40,'400 V 50 Hz',60]),line([40,'kW',10],[100,'Motor type',40],[160,'Product ID',40],[220,'In (A)',25],[280,'η %',15],[340,'cos φ',20]),
+   line([40,'45'],[100,'ZX 280'],[160,'310126'],[220,'89'],[280,'92'],[340,'0.79']),line([40,'55'],[100,'ZX 280'],[160,'310125'],[220,'107'],[280,'92.8'],[340,'0.8'])]]]),'f.pdf');
+  expect(rows.map(r=>[r.entry.model,r.entry.config])).toEqual([['280M8','400 V, 50 Hz, 45 kW'],['280M8','400 V, 50 Hz, 55 kW'],['ZX 280','310126, 400 V, 50 Hz'],['ZX 280','310125, 400 V, 50 Hz']]);
+ });
+ it('reads headings in other languages and takes the product name printed over a size-only table',()=>{
+  const rows=catalogueFromTables(new Map([[9,[line([40,'QX7 4-POLIG | 1500 1/min',140]),
+   line([40,'Baugröße',40],[100,'Nennleistung',50],[160,'Nennstrom',40],[220,'Wirkungsgrad',50],[290,'Leistungsfaktor',60],[360,'Gewicht',30]),
+   line([100,'kW',10],[160,'400 V',20],[220,'%',8],[360,'kg',10]),
+   line([40,'90L-4'],[100,'1,5'],[160,'3,3'],[220,'82,8'],[290,'0,80'],[360,'21']),
+   line([40,'100L-4'],[100,'2,2'],[160,'4,7'],[220,'84,3'],[290,'0,80'],[360,'28'])]]]),'de.pdf');
+  expect(rows.map(r=>[r.entry.model,r.entry.config,r.entry.ratedKw,r.entry.inA,r.entry.efficiency,r.entry.pf])).toEqual([
+   ['QX7','90L-4, 400 V, 4-pole','1.5','3.3','0.828','0.8'],['QX7','100L-4, 400 V, 4-pole','2.2','4.7','0.843','0.8']]);
+  expect(rows[0]!.boxes!.map(b=>b.key)).toEqual(expect.arrayContaining(['model','config','ratedKw','inA','efficiency','pf']));
+ });
+ it('finds kW, In, efficiency and power factor by the values alone when no heading is understood',()=>{
+  const rows=catalogueFromTables(new Map([[3,[line([40,'Typ',20],[100,'Xa',10],[160,'Xb',10],[220,'Xc',10],[290,'Xd',10]),
+   line([40,'ZQ 90'],[100,'1.5'],[160,'3.3'],[220,'82.8'],[290,'0.80']),
+   line([40,'ZQ 100'],[100,'2.2'],[160,'4.7'],[220,'84.3'],[290,'0.80']),
+   line([40,'ZQ 112'],[100,'4'],[160,'8.1'],[220,'86.6'],[290,'0.82'])]]]),'x.pdf');
+  expect(rows.map(r=>[r.entry.model,r.entry.ratedKw,r.entry.inA,r.entry.efficiency,r.entry.pf])).toEqual([
+   ['ZQ 90','1.5','3.3','0.828','0.8'],['ZQ 100','2.2','4.7','0.843','0.8'],['ZQ 112','4','8.1','0.866','0.82']]);
+ });
+ it('reads a scanned table from OCR word boxes',()=>{
+  // Word boxes as OCR gives them: pixels from the top left of a page drawn at 2 pixels per point.
+  const word=(text:string,x:number,y:number)=>({text,bbox:{x0:x,y0:y,x1:x+text.length*12,y1:y+20}});
+  const words=[word('ZX',80,100),word('series',112,100),word('400',260,100),word('V',300,100),
+   word('Type',80,160),word('Rated',240,160),word('power',308,160),word('Current',440,160),word('Efficiency',560,160),word('cos',720,160),word('φ',760,160),
+   word('kW',240,190),word('A',440,190),word('%',560,190),
+   ...[['ZX','90','1.5','3.3','82.8','0.80'],['ZX','100','2.2','4.7','84.3','0.80'],['ZX','112','4','8.1','86.6','0.82']].flatMap(([a,b,p,i,e,f],k)=>
+    [word(a!,80,240+k*30),word(b!,110,240+k*30),word(p!,240,240+k*30),word(i!,440,240+k*30),word(e!,560,240+k*30),word(f!,720,240+k*30)])];
+  const rows=catalogueFromTables(new Map([[1,ocrLines(words,(x,y)=>[x/2,1000-y/2])]]),'scan.pdf');
+  expect(rows.map(r=>[r.entry.model,r.entry.ratedKw,r.entry.inA,r.entry.efficiency,r.entry.pf,r.entry.un])).toEqual([
+   ['ZX 90','1.5','3.3','0.828','0.8','400 V'],['ZX 100','2.2','4.7','0.843','0.8','400 V'],['ZX 112','4','8.1','0.866','0.82','400 V']]);
+  expect(rows[0]!.boxes!.find(b=>b.key==='inA')).toEqual(expect.objectContaining({x0:220,y:870}));
+ });
+ it('finds where values are printed when a reader kept no positions',()=>{
+  const e={...emptyEntry(),model:'ZX 400L4',ratedKw:'250',inA:'56',un:'3000 V'};
+  const boxes=locate(e,[{cells:[{x:10,w:30,h:8,y:500,text:'ZX 400L4'},{x:50,w:15,h:8,y:500,text:'250 kW'},{x:80,w:10,h:8,y:500,text:'56'}]},{cells:[{x:10,w:60,h:8,y:700,text:'3000 V, 50 Hz'}]}]);
+  expect(boxes.map(b=>b.key)).toEqual(['model','ratedKw','inA','un']);expect(boxes[0]).toEqual({key:'model',x0:10,x1:40,y:500,h:8});
+ });
+});
+
 describe('reading datasheets',()=>{
  const text='Three-phase motor\nArticle No. M-200-4P\nRated power 55 kW\nRated voltage 400 V 50 Hz 3~\nRated current 98,5 A\nEfficiency 95.1 %\nPower factor cos φ 0.86';
  it('finds labelled values and checks them against the page',()=>{
@@ -160,5 +321,8 @@ describe('reading datasheets',()=>{
   const [p]=parseEquipmentReply(reply,[{page:2,text,mode:'text',confidence:null}],'sheet.pdf');
   expect(p!.entry.efficiency).toBe('0.951');expect(p!.unverified).toEqual(['inA']);
   expect(verify({...emptyEntry(),model:'X-9'},text)).toEqual(['model']);
+  // Trailing zeros on the page are the same number; a longer number is not.
+  expect(verify({...emptyEntry(),pf:'0.8',inA:'13.5',efficiency:'0.9'},'cos φ 0.80, In 13.50 A, η 90.0 %')).toEqual([]);
+  expect(verify({...emptyEntry(),inA:'1.5'},'In 1.55 A')).toEqual(['inA']);
  });
 });

@@ -3,6 +3,7 @@ import {DUTIES,FROM_CATALOGUE,LOAD_KEYS,TICK,TICK_KEYS,emptyEntry,emptyLoad,fill
  DEFAULT_FACTORS,DEFAULT_MARGIN,type CatalogueIndex,type CatalogueKey,type CatalogueRow,type Duty,type Factors,type LoadKey} from '../engine/loads';
 import type {LoadPanel,PageEvidence} from '../store/schema';
 import {cleanValue,normalize,type InputTable} from './load-list';
+import type {PositionedLine} from './parse';
 
 // Header words for each equipment-list and catalogue column, tried in this order; each column takes the first unused match.
 // Remarks are read only as a catalogue entry's source note.
@@ -133,7 +134,10 @@ export function mergeSizing(existing:readonly SheetRow[],incoming:readonly Sheet
 }
 
 // Datasheet PDFs and scans: labelled values only, each proposal checked against the page text before anyone accepts it.
-export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean};
+// boxes: where each value is printed on its page (PDF points), for showing it in the review.
+export type Box={key:CatalogueKey;x0:number;x1:number;y:number;h:number};
+// note: why In and Un are flagged when a row's values do not work out to its voltage.
+export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean;boxes?:Box[];note?:string};
 const N='(\\d+(?:[.,]\\d+)?)';
 const LABELLED:[CatalogueKey,RegExp][]=[
  ['ratedKw',new RegExp(`power\\b[^\\n\\d]{0,30}${N}\\s*kW\\b`,'i')],
@@ -144,9 +148,9 @@ const LABELLED:[CatalogueKey,RegExp][]=[
  ['pf',/(?:power\s*factor|cos\s*(?:φ|ϕ|phi|ф)?)[^\n\d]{0,20}(0[.,]\d+|1(?:[.,]0+)?)(?!\d)/i],
 ];
 const MODEL=/(?:article|order|part|catalog(?:ue)?|product)\s*(?:no\.?|number|code)\s*[:#.]?\s*([A-Z0-9][A-Z0-9./-]{3,40})|\b(?:model|type)\s*[:#]\s*([A-Z0-9][A-Z0-9./-]{2,40})/gi;
-const dot=(v:string)=>v.replace(',','.');
+export const dot=(v:string)=>v.replace(',','.');
 // Decimals throughout: an efficiency of 94.2 (%) is kept as 0.942.
-const asFraction=(v:string)=>{const n=num(dot(v));return n!==null&&n>1&&n<=100?String(+(n/100).toFixed(4)):dot(v);};
+export const asFraction=(v:string)=>{const n=num(dot(v));return n!==null&&n>1&&n<=100?String(+(n/100).toFixed(4)):dot(v);};
 export function catalogueFromPages(pages:readonly PageEvidence[],file:string):Proposal[] {
  const out:Proposal[]=[];
  for(const page of pages){
@@ -159,21 +163,29 @@ export function catalogueFromPages(pages:readonly PageEvidence[],file:string):Pr
    const found=FROM_CATALOGUE.filter(k=>e[k]).length;if(!found||!e.model&&found<2)return;
    const hz=block.match(/\b(50|60)\s*Hz/i)?.[1],ph=/\b3\s*(?:~|ph\b|phase|AC\b)|three[\s-]*phase/i.test(block)?'3-phase':/\b1\s*(?:~|ph\b|phase)|single[\s-]*phase/i.test(block)?'1-phase':'';
    e.config=clip([e.un,ph,hz?`${hz} Hz`:''].filter(Boolean).join(', '));e.source=clip(`${file}, page ${page.page}${page.mode==='ocr'?' (OCR)':''}`);
-   out.push({entry:e,page:page.page,evidence:[...lines].join(' · ').slice(0,300),unverified:verify(e,page.text),include:true});
+   if(out.length>=500)throw Error('The document has more than 500 entries. Split the file.');
+   out.push({entry:e,page:page.page,evidence:[...lines].join(' · ').slice(0,300),unverified:verify(e,block),include:true});
   });
  }
- if(out.length>500)throw Error('The document has more than 500 entries. Split the file.');
  return out;
 }
 const esc=(s:string)=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 // The values not written on the page they are said to come from (a misread or a model's guess), for the engineer to check.
 export function verify(e:CatalogueRow,text:string):CatalogueKey[] {
- const t=text.replace(/(\d),(\d)/g,'$1.$2'),has=(v:string)=>new RegExp(`(?<![\\d.])${esc(v)}(?!\\d|\\.\\d*[1-9])`).test(t),bad:CatalogueKey[]=[];
+ // Numbers on the page are compared as numbers: "0.80" and "13.50" there are the 0.8 and 13.5 stored.
+ const t=text.replace(/(\d),(\d)/g,'$1.$2'),nums=t.replace(/\d+(?:\.\d+)?/g,m=>String(Number(m))),has=(v:string)=>new RegExp(`(?<![\\d.])${esc(v)}(?![\\d.]*\\d)`).test(nums),bad:CatalogueKey[]=[];
  if(e.model&&!t.toLowerCase().includes(e.model.toLowerCase()))bad.push('model');
  for(const k of ['ratedKw','protA','inA','efficiency','pf'] as const){const v=e[k].trim();if(!v)continue;const n=num(v);
   const forms=n===null?[v]:[String(n),...(n<1?[String(+(n*100).toFixed(4))]:[])];if(!forms.some(has))bad.push(k);}
- for(const k of ['un','config'] as const){const v=e[k].match(/\d{2,4}/)?.[0];if(v&&!has(v))bad.push(k);}
+ // A configuration led by a code ("310126, 690 V…", "80M, 400 V…") is found when that code is printed.
+ for(const k of ['un','config'] as const){const lead=e[k].split(',')[0]!.trim().toLowerCase(),v=e[k].match(/\d{2,5}/)?.[0];if(v&&!has(v)&&!(lead&&t.toLowerCase().includes(lead)))bad.push(k);}
  return bad;
+}
+// Where a row's values are printed when its reader kept no positions (single datasheets, the local model): every text
+// item that holds one of them, matched as verify matches them, so a value printed twice is boxed twice.
+export function locate(e:CatalogueRow,lines:readonly PositionedLine[]):Box[] {
+ const keys=(['model','ratedKw','protA','inA','efficiency','pf','un','config'] as const).filter(k=>k==='un'||k==='config'?/\d{2,5}/.test(e[k]):e[k].trim());
+ return lines.flatMap(l=>l.cells.flatMap(c=>{const miss=verify(e,c.text);return keys.filter(k=>!miss.includes(k)).map(k=>({key:k,x0:c.x,x1:c.x+(c.w??0),y:c.y??l.y??0,h:c.h||8}));}));
 }
 // The local model's reply (see askEquipment): rows of strings, each checked against the page it names.
 export function parseEquipmentReply(content:string,pages:readonly PageEvidence[],file:string):Proposal[] {

@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "83913e0ea673b7f1923a2e6ca125a739eaa6efee07ae0d7048e5ef664f28fd72",
+  "sourceFingerprint": "d91c7bccd4dea97015c08c1035e17dbd173f6ca8211bff12caf0b1b3f6f4ae51",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -54,7 +54,7 @@
       "refreshKnowledge": "npm run dkg",
       "checkKnowledge": "npm run dkg:check",
       "moduleLookup": "node scripts/dkg.mjs --module src/engine/sheet.ts",
-      "deploy": "Local preview only. No hosting or cloud publication configured."
+      "deploy": "Static dist on a dedicated HTTPS origin. Vercel, Cloudflare Pages and Netlify header configuration is present. Production deployment has not been verified."
     },
     "invariants": [
       "Keep all 41 Cable Sizing columns, their headings, input/list/calculated roles and dropdown narrowing unchanged.",
@@ -68,7 +68,7 @@
       "A supplier capacity is valid only for its specified cable OD. Bending, payload and site lifting limits still apply.",
       "Selecting a different load-list cable requires its physical dimensions and source to be confirmed before a drum count appears.",
       "Keystone bend guidance is an optional reference for selected constructions, with editable multipliers and a source note; installation and fixed bend values never automatically set the drum barrel radius limit. Drum compatibility is an estimate against the entered limit, not supplier approval. Changing the linked cable clears guidance.",
-      "All document processing, local assets, autosave and export run on the user's device. The server binds only to 127.0.0.1.",
+      "Imports, OCR, autosave and exports run in the browser. Runtime assets come from the site origin. The development server binds only to 127.0.0.1.",
       "Update this semantic knowledge source when behaviour changes. Generated fingerprints do not automatically explain new business rules.",
       "explain.ts, issues.ts and the dashboard derive every electrical value from sheet.ts results or evaluateRow; never add independent electrical maths to them.",
       "Connected-load KPIs sum only final circuits (rows nothing is fed from) so board feeders are not double counted.",
@@ -76,7 +76,7 @@
       "Screen colours use the app.css tokens only; text tokens keep at least 4.5:1 contrast in both themes.",
       "Schematic import reads values only from drawing text. Anything worked out (system voltage from the board, phase from cores or voltage, kW from HP or kVA×PF, a feeder load summed from its circuits, copper assumed when the conductor is not stated) is listed in Candidate.inferred with its reason and shown in italics in the review. Cable run length is never inferred.",
       "The load-list assistant never changes the sheet by itself: proposed changes need a tick and Apply, only real rows and input columns are accepted, and cable runs (AH) are never proposed. Panel import never guesses a panel: rows with no title or panel-named sheet stay without From and are flagged. A load list's \"Load factor\" column is never read as diversity (H). Export splits into one Cable Sizing sheet per panel only when no row feeds another listed panel, so Excel's total-VD chain is never cut.",
-      "AI reading talks only to http://127.0.0.1 or localhost on ports 11434 (Ollama) and 1234 (LM Studio); isLocalUrl and the CSP connect-src enforce it. An AI value is kept only when its quote is in the drawing text and the value is in the quote; kept values are Candidate.inferred and reviewed like any other. No hosted AI, API key or proxy.",
+      "AI reading talks only to http://127.0.0.1 or localhost on ports 11434 (Ollama) and 1234 (LM Studio); isLocalUrl and the CSP connect-src enforce it. Redirects and credentials are disabled. Before any prompt, Ollama must report cloud.disabled true or an LM Studio user must confirm on-device inference with LM Link off. An AI value is kept only when its quote is in the drawing text and the value is in the quote; kept values are Candidate.inferred and reviewed like any other. No hosted AI, API key or proxy.",
       "Rows created from a \"fed from\" note alone start unticked: without a cable run they would blank total VD for every circuit below them.",
       "Voltages, cores, sizes or cable types outside the workbook lists are kept as read and show as invalid on the sheet; the import never maps them to the nearest listed value.",
       "Every saved sheet cell holds at most 300 characters (MAX_CELL); imports, pastes and inputs clip to it so autosave and backups keep working.",
@@ -220,7 +220,7 @@
     "modules": {
       "src/main.tsx": "Mounts Preact and starts local project restoration/autosave.",
       "src/ui/App.tsx": "Four active tabs (Single cable, Load list, Cable sizing, Drums), undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
-      "src/ui/state.ts": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced autosave and a BroadcastChannel warning when another tab saves the same project. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
+      "src/ui/state.ts": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced tab-scoped autosave and explicit erasure. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
       "src/ui/SingleCable.tsx": "One unchanged workbook row, result strip, missing-input shortcuts, inline Calculation panel (pick a size from the ladder), print/PDF and Excel export.",
       "src/ui/LoadList.tsx": "Import mapping dialog; header with Import menu (load list or schematic), Add row, a More menu (Print / PDF, Ask AI) and Export to Excel as the only primary action; one-line summary (status split, connected load on final circuits only, worst total VD opening its calculation, cable km toggling quantities with drum links, pending suggestions with Accept all); one filter bar (panel dropdown, status chips, search, issues list with jump-to-cell, Defaults popover for suggestion settings, View menu with screen-only column presets plus the colour key); bulk edit of selected rows, grid, calculation drawer and 'How the sheet works' notes. Appending enforces the 2,000-row project limit. Drop routing by file type, reading progress bar with Cancel, and the schematic review dialog.",
       "src/ui/Sheet.tsx": "Grid of the workbook's 72 columns (A–BT) with workbook colours, dropdowns, Excel keys (Enter, arrows at text edges, Ctrl/⌘+D fill down, Delete clears dropdowns), row selection on the Item cell, optional filtered row order, calculation/delete row tools, block paste and virtualization above 60 visible rows. Optional screen-only column groups (GROUPS: a group row above the letters, hiding unpicked groups; A–D stay pinned) and per-row status marks on the Item cell.",
@@ -232,10 +232,10 @@
       "src/import/load-list.ts": "ExcelJS read-only workbook import, CSV/TSV parser, header aliases, explicit unit cleanup, mapping and drum-template parsing. Ambiguous numbers remain invalid instead of being partially parsed.",
       "src/import/document.ts": "Local PDF text extraction with position-aware columns and English Tesseract OCR fallback. Used by supplier drum imports in this build.",
       "src/import/drum-catalogue.ts": "Supplier drum CSV/XLSX import or explicitly labelled/unit-qualified PDF/image text extraction. Candidate values require review before activation.",
-      "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading; electrical catalogue UI is archived.",
+      "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading, and ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs); electrical catalogue UI is archived.",
       "src/export/template.ts": "Patches only entered input cells in the original XLSX ZIP, retains all formulas/validations/styles, extends beyond 196 rows and adds preview caches.",
       "src/store/schema.ts": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
-      "src/store/project.ts": "Per-tab sessionStorage persistence (a new tab starts blank), removal of the old IndexedDB device copy, safe backup import and browser downloads.",
+      "src/store/project.ts": "Tab-scoped sessionStorage autosave and erasure, targeted cleanup of legacy IndexedDB project keys, validated backup import and browser downloads.",
       "src/ui/Drums.tsx": "Linked or typed runs, geometry confirmation, adaptor controls, allocation cards and enquiry export.",
       "src/ui/DrumSources.tsx": "Supplier file chooser, extraction progress, review acknowledgement and basic/supplier selection.",
       "src/ui/DrumVisual.tsx": "Code-native SVG drum on a continuous turntable rotation (28 s per turn) with convex-hull cylinder outlines and near/far flange draw order that flips with the angle. Drag to turn; stays still for prefers-reduced-motion and pauses off screen. Visual fill is illustrative.",
@@ -243,8 +243,8 @@
       "src/ui/app.css": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "src/data/sizing-tables.json": "Generated lookup data: 67 columns (A–BO), 3,260 ratings in 461 blocks, 27 temperature rows, 100 grouping keys and 7 soil rows. Also the FaultData tables (Cu resistance, k values, resistance multipliers, device multiples, transformer Uz) and the Settings defaults Ze, fault level, clearance time and Cmin. Plus the CPC type table (k, resistance multipliers, same-material and IEC 60228 flags) and the SS 638 Table 41.1 disconnection times (TN-S and TT), the earthing system list and the default earthing system.",
       "scripts/extract-workbook.mjs": "Extracts workbook tables for the 67 app columns A–BO (validations of visible columns, all Settings notes, the FaultData sheet incl. CPC types, TN-S/TT disconnection times and the earthing list, and Settings defaults incl. Def_Earthing) and copies the unmodified template; checks contiguous lookup blocks.",
-      "scripts/build.mjs": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Asset checksums cover the exact copied package files, excluding unrelated sync-conflict copies that may exist in dist. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin and a restrictive Permissions-Policy.",
-      "scripts/verify-vendor.mjs": "Checks built local PDF/OCR assets against generated SHA-256 checksums.",
+      "scripts/build.mjs": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Each build verifies the approved release file list, the blank workbook and pinned runtime assets. Unexpected files and links prevent publishing. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin and a restrictive Permissions-Policy.",
+      "scripts/verify-vendor.mjs": "Verifies the release file list and compares the blank workbook and bundled PDF, OCR and font assets with reviewed SHA-256 pins.",
       "scripts/dkg.mjs": "Generates this graph, code/import/export index, file hashes, change history and stale-check commands. Watches project files during dev.",
       "scripts/verify.mjs": "Runs the full check sequence, records results against a source fingerprint and refreshes the DKG.",
       "src/ui/Calculation.tsx": "Hand-calculation view of one row (Ib, k factors, minimum It, Iz, circuit and total VD), size ladder with pick buttons and the From→To feeder chain. Display only; values come from sheet.ts.",
@@ -261,9 +261,12 @@
       "src/import/equipment.ts": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "src/export/equipment.ts": "Load list Excel export: a cover page, then one sheet per panel laid out cell for cell as the engineer's designed panel sheet (equipment-layout.ts) with live formulas; catalogue-only export.",
       "src/ui/Loads.tsx": "Load list tab: panel tabs, the equipment grid (ticks, dropdowns, catalogue placeholders, Excel paste), panel totals with editable factors and margin, import, export and Send to cable sizing.",
-      "src/ui/Catalogue.tsx": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, tick to add).",
+      "src/ui/Catalogue.tsx": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "src/ui/Scenario.tsx": "Search across panels by KKS/description, scenario comparison table and inline-SVG grouped bar charts, plant load by panel.",
-      "src/export/equipment-layout.ts": "Panel sheet layout: header rows 1-6, at least 32 item rows, the running plant load, operating factors and load basis summary, page setup; formulas with cached results."
+      "src/export/equipment-layout.ts": "Panel sheet layout: header rows 1-6, at least 32 item rows, the running plant load, operating factors and load basis summary, page setup; formulas with cached results.",
+      "src/import/vocabulary.ts": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix).",
+      "src/import/rating-table.ts": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view.",
+      "src/import/webpage.ts": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright."
     },
     "calculationReference": {
       "electrical": "I1 = kW × diversity × 1000 / (V × PF × (sqrt(3) for 3-phase, else 1)); Ib = I1 × sqrt(1 + THD²); Iz = It × parallel × Ca × Cg × Cs × Ci × Ct; circuit VD% = Ib × run_m × mV/A/m / (10 × parallel × V).",
@@ -315,11 +318,11 @@
       "Single-core run counts omit neutral and earth. Add separately when their product/size differs or plan explicit typed runs when extra conductors are required.",
       "Supplier PDF/OCR extraction handles explicitly labelled units, not arbitrary unlabeled tabulations. Use reviewed CSV/XLSX or manual adaptor inputs when extraction is incomplete.",
       "No cable-catalogue/IEC electrical workflow, authentication, multi-user revisions, purchase orders, cloud backend or published site is active in this version.",
-      "Work lasts only while its tab is open. Keep JSON project backups and exported workbooks.",
+      "Browser session restore can retain work. Save a JSON backup for deliberate long-term storage.",
       "Undo history is lost on reload. Use JSON backups for checkpoints.",
       "Print/PDF relies on the browser print dialog; choose A3 landscape and enable background graphics for PASS/FAIL shading.",
-      "The cross-tab warning detects saves from other tabs of the same browser profile only.",
-      "Security headers are sent by the local dev server; a different static host must be configured to send equivalent headers.",
+      "Duplicated or restored tabs can hold separate copies. Clear this tab’s data removes its autosave and undo history. Exported files are ordinary files on the device.",
+      "A real HTTPS deployment still needs response-header, artifact, injected-script and host-log review. See docs/security-review.md.",
       "The drum turntable animates with requestAnimationFrame, so browsers pause it in hidden tabs or panes.",
       "Schematic recognition is rule-based. It reads text, not line work: connections are inferred from where annotations sit (around each breaker rating, in schedule tables or in CAD block attributes). Unusual layouts can group text wrongly, so the review step is mandatory reading. Tags are taken as written; differently spelt board names (MSB1 vs MSB-1) are not linked.",
       "Image reading (screenshots, scans, PDFs without a text layer) uses on-device OCR in three orientations plus line tracing of busbars and feeders. It handles orthogonal single-line diagrams; diagonal lines, dense overlapping labels, red-line mark-ups over text and very small text (under about 10 px) read poorly. Numbers from OCR must be checked in the review.",
@@ -450,8 +453,11 @@
       "src/import/panels.ts",
       "src/import/parse.ts",
       "src/import/raster.ts",
+      "src/import/rating-table.ts",
       "src/import/schematic-read.ts",
       "src/import/schematic.ts",
+      "src/import/vocabulary.ts",
+      "src/import/webpage.ts",
       "src/main.tsx",
       "src/store/project.ts",
       "src/store/schema.ts",
@@ -483,9 +489,9 @@
       "jszip": "3.10.2",
       "lucide-preact": "0.468.0",
       "pdfjs-dist": "5.4.296",
-      "preact": "10.27.2",
+      "preact": "10.29.8",
       "tesseract.js": "6.0.1",
-      "zod": "3.25.76"
+      "zod": "4.6.7"
     },
     "commands": {
       "dev": "node scripts/build.mjs --serve",
@@ -513,6 +519,14 @@
       {
         "file": "tests/ai.test.ts",
         "name": "only talks to a model on this computer"
+      },
+      {
+        "file": "tests/ai.test.ts",
+        "name": "sends the prompt only after the local-only check and refuses redirects on the POST"
+      },
+      {
+        "file": "tests/ai.test.ts",
+        "name": "requires confirmation of on-device LM Studio routing before sending a prompt"
       },
       {
         "file": "tests/ai.test.ts",
@@ -632,6 +646,10 @@
       },
       {
         "file": "tests/hardening.test.ts",
+        "name": "keeps a panel name with $ signs as written"
+      },
+      {
+        "file": "tests/hardening.test.ts",
         "name": "treats hex, binary and Infinity spellings as invalid entries"
       },
       {
@@ -669,6 +687,14 @@
       {
         "file": "tests/hardening.test.ts",
         "name": "moves step06 and step07 saved fault inputs to their step08 columns once"
+      },
+      {
+        "file": "tests/hardening.test.ts",
+        "name": "serves the page CSP plus frame-ancestors from both hosts"
+      },
+      {
+        "file": "tests/hardening.test.ts",
+        "name": "sends the same protective headers from both hosts"
       },
       {
         "file": "tests/load-list.test.ts",
@@ -748,6 +774,70 @@
       },
       {
         "file": "tests/loads.test.ts",
+        "name": "keeps table cells apart and drops scripts"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads label/value pairs, converts horsepower and keeps ranges as written"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "finds where a saved search-result page forwards to, and leaves real pages alone"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads a maker's sheet: model heading, supply voltage range, copyright brand; skips signal inputs, classes and losses"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads a printed shop page: split ligatures, wrapped labels, \"|\" separators, maker from the title"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads stacked headings: model column, full-load efficiency, In not Is/In, poles from sub-headings"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads kW and hp, current per voltage, percent power factor; the series over a frame-only table is the model"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "prefers catalogue rows over one product read from the whole file"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "takes the printed voltage the rows work out to, skips no-load current and flags rows that do not add up"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads a single-phase table from its values when no phase is printed"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "tells apart one model printed with other values on two pages, and drops a row printed twice"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "tells apart one frame at several outputs by its kW; a type is the model and a numeric part number the configuration"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads headings in other languages and takes the product name printed over a size-only table"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "finds kW, In, efficiency and power factor by the values alone when no heading is understood"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "reads a scanned table from OCR word boxes"
+      },
+      {
+        "file": "tests/loads.test.ts",
+        "name": "finds where values are printed when a reader kept no positions"
+      },
+      {
+        "file": "tests/loads.test.ts",
         "name": "finds labelled values and checks them against the page"
       },
       {
@@ -785,6 +875,10 @@
       {
         "file": "tests/panels.test.ts",
         "name": "flags a load whose list In (A) is far from the calculated Ib, and reads 230 V as single-phase"
+      },
+      {
+        "file": "tests/release.test.mjs",
+        "name": "keeps unlisted documents and linked files out of the static release"
       },
       {
         "file": "tests/schematic.test.ts",
@@ -966,8 +1060,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-18T08:15:25.064Z",
-    "sourceFingerprint": "83913e0ea673b7f1923a2e6ca125a739eaa6efee07ae0d7048e5ef664f28fd72",
+    "checkedAt": "2026-11-19T02:31:01.906Z",
+    "sourceFingerprint": "d91c7bccd4dea97015c08c1035e17dbd173f6ca8211bff12caf0b1b3f6f4ae51",
     "status": "passed",
     "steps": [
       {
@@ -978,17 +1072,17 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  11 passed (11); Tests  114 passed (114)"
+        "summary": "Test Files  12 passed (12); Tests  138 passed (138)"
       },
       {
         "command": "npm run build",
         "exitCode": 0,
-        "summary": "Passed"
+        "summary": "Verified 211 asset hashes (PDF, OCR, fonts and blank workbook) and the release file list."
       },
       {
         "command": "npm run verify:vendor",
         "exitCode": 0,
-        "summary": "Verified 204 local PDF/OCR asset checksums."
+        "summary": "Verified 211 asset hashes (PDF, OCR, fonts and blank workbook) and the release file list."
       }
     ],
     "current": true
@@ -996,29 +1090,36 @@
   "files": [
     {
       "path": ".gitignore",
-      "bytes": 85,
-      "sha256": "7c557252220553439512a0c248c0b44a1a6ddcffb8bfea2fec1d914e55722b8c",
+      "bytes": 205,
+      "sha256": "348135f1da4a267e3ac81795498fd4a3a20961965e20280a05b52c3f2577b5d8",
+      "role": "Project configuration.",
+      "runtime": false
+    },
+    {
+      "path": ".vercelignore",
+      "bytes": 505,
+      "sha256": "39824b630295242c325f9e825fe84705e6aade23958cee6cf9dca1a90c896508",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "AGENTS.md",
-      "bytes": 22411,
-      "sha256": "b7785c143f4428dd88096ee7072b52ee99916ce567a80e2f7d869e3452e99c41",
+      "bytes": 24718,
+      "sha256": "c983345d1f4b5d7760c36f8b6a46716f2a178a64223e7605ac512281878bd94f",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "README.md",
-      "bytes": 10274,
-      "sha256": "3cf7d8ae045f933c2bb17e42b44293a2d668c4c0257e6c79a290488be5c6135c",
+      "bytes": 11520,
+      "sha256": "a8eece4c103882b16c00e49a18098c5470dac840f8d384ea35431a8997225294",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "docs/project-knowledge.json",
-      "bytes": 40818,
-      "sha256": "534161c75b670a06b5e8fc0538f5be228c943561b70740d2f1c83fbd988970d1",
+      "bytes": 43401,
+      "sha256": "1142def59e947f9fd36f502f9f8ba534acd601c96aba6601f632c5b856432ac3",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1030,24 +1131,38 @@
       "runtime": false
     },
     {
+      "path": "docs/security-review.md",
+      "bytes": 5989,
+      "sha256": "02525f2b8c95093d371d545f6417ff06f72817c84bf4f765824319f1c5a458d8",
+      "role": "Project documentation.",
+      "runtime": false
+    },
+    {
       "path": "docs/verification.json",
-      "bytes": 645,
-      "sha256": "8f30f20304d517202346a12a8f546515a8a6afda6f427b88713bf2c66990297b",
+      "bytes": 774,
+      "sha256": "d0272a222f353ae137e38defb121ac41fd6097c77ab039777549dbd786e1a79e",
       "role": "Project documentation.",
       "runtime": false
     },
     {
       "path": "package-lock.json",
-      "bytes": 179002,
-      "sha256": "3484716237d37b89838d3f16b0e08036c1fa63e0ead91398ddf87ef1726fb612",
+      "bytes": 163564,
+      "sha256": "7a113f69c3ac9f6c5648f5fbb4ca98fbf67e22e77b2fc33b02cad4a854bde6ae",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "package.json",
-      "bytes": 1029,
-      "sha256": "357e06a4e5fedbbced0238ce703dae75edf7816b9d357895346612ed36fcef35",
+      "bytes": 1026,
+      "sha256": "4f83cf7d3310e227dfea1dbf06341ff19b9c6fdc89d8586a0daee59e576ebb18",
       "role": "Project configuration.",
+      "runtime": false
+    },
+    {
+      "path": "public/_headers",
+      "bytes": 878,
+      "sha256": "e2bfad61d86940316671381f73938552a693f02303ff0571cfbe161eaf72fc9f",
+      "role": "Local static asset.",
       "runtime": false
     },
     {
@@ -1059,8 +1174,8 @@
     },
     {
       "path": "public/index.html",
-      "bytes": 895,
-      "sha256": "7d61130f5aadd7d37a6b237bc3439c2e10567a85bdfb4327ec806e9048c8c96e",
+      "bytes": 914,
+      "sha256": "8b42653e33816afab4d629b17a64fb1ce2ceec7fd55a5b76d10e479795e3948d",
       "role": "Local static asset.",
       "runtime": false
     },
@@ -1073,12 +1188,13 @@
     },
     {
       "path": "scripts/build.mjs",
-      "bytes": 3627,
-      "sha256": "9238dea8a225efcffe0d23a4f010fec358dcac446e5288488e48d30b0dadb9a2",
-      "role": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Asset checksums cover the exact copied package files, excluding unrelated sync-conflict copies that may exist in dist. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin and a restrictive Permissions-Policy.",
+      "bytes": 4126,
+      "sha256": "9d6f5309213a19d912c3e053fe094509f6ba69d5178d36df96db66f3cfeebc84",
+      "role": "esbuild IIFE build, vendored assets/fonts, checksums, file watching and loopback static server. Each build verifies the approved release file list, the blank workbook and pinned runtime assets. Unexpected files and links prevent publishing. The loopback server also sends no-referrer, frame-ancestors none/X-Frame-Options DENY, COOP/CORP same-origin and a restrictive Permissions-Policy.",
       "exports": [],
       "imports": [
         "./dkg.mjs",
+        "./verify-vendor.mjs",
         "esbuild",
         "node:crypto",
         "node:fs/promises",
@@ -1089,8 +1205,8 @@
     },
     {
       "path": "scripts/dkg.mjs",
-      "bytes": 8505,
-      "sha256": "f3e7e26029d7bd76994c36ea2d7a196fc4eb7d0394fba890b4588a6541bfe932",
+      "bytes": 8758,
+      "sha256": "56583cd7b4cbcb391c605812ad9323b17c3fe7b28b2d81745240cbc3d29edcd2",
       "role": "Generates this graph, code/import/export index, file hashes, change history and stale-check commands. Watches project files during dev.",
       "exports": [
         "snapshot",
@@ -1098,6 +1214,7 @@
         "watchKnowledge"
       ],
       "imports": [
+        "./verify-vendor.mjs",
         "node:crypto",
         "node:fs",
         "node:fs/promises",
@@ -1122,14 +1239,28 @@
       "runtime": false
     },
     {
+      "path": "scripts/vendor-checksums.txt",
+      "bytes": 21234,
+      "sha256": "d316529eb9873f09e00e847979a6b2c684cf013e9251f6c96dc0c0c1a8fb936b",
+      "role": "Project configuration.",
+      "runtime": false
+    },
+    {
       "path": "scripts/verify-vendor.mjs",
-      "bytes": 439,
-      "sha256": "63306adae79c24c0b0e6cbc0e36b43f6a68410c967a019d163abf2ef40ae10e8",
-      "role": "Checks built local PDF/OCR assets against generated SHA-256 checksums.",
-      "exports": [],
+      "bytes": 2794,
+      "sha256": "10257bde369f2942bf51402df14374ae63ad31951f8dcd5a076704ae56478226",
+      "role": "Verifies the release file list and compares the blank workbook and bundled PDF, OCR and font assets with reviewed SHA-256 pins.",
+      "exports": [
+        "checkOutputTree",
+        "publicFiles",
+        "verifyRelease",
+        "workbook"
+      ],
       "imports": [
         "node:crypto",
-        "node:fs/promises"
+        "node:fs/promises",
+        "node:path",
+        "node:url"
       ],
       "runtime": false
     },
@@ -1397,8 +1528,8 @@
     },
     {
       "path": "src/export/template.ts",
-      "bytes": 10214,
-      "sha256": "c5d3e9656906f8f2ed725614fb536d2738b3f0d8ea938adbfe89c8ffdc0ae982",
+      "bytes": 10226,
+      "sha256": "009e6b0a4c1396f5793b9d40952e98d3f9b1f91fd249ce9c4358e0e4e94d2187",
       "role": "Patches only entered input cells in the original XLSX ZIP, retains all formulas/validations/styles, extends beyond 196 rows and adds preview caches.",
       "exports": [
         "exportSheet",
@@ -1415,8 +1546,8 @@
     },
     {
       "path": "src/import/ai.ts",
-      "bytes": 11533,
-      "sha256": "bbd026d723f40a89302315156b08c2f6651acc5c513c2eeaa2b9f1f816509733",
+      "bytes": 12281,
+      "sha256": "19104ff8a3ece9ae7962a0967c759a54804e7dd37800c6e10159ebd32ff916d3",
       "role": "Project configuration.",
       "exports": [
         "AI_DEFAULT",
@@ -1446,12 +1577,16 @@
     },
     {
       "path": "src/import/document.ts",
-      "bytes": 6448,
-      "sha256": "64668fdea5c03b5544ac4665cbbd3182ebc88477bb1a96e317e4a9b76ee0b672",
+      "bytes": 8986,
+      "sha256": "bcb7698d618a82690338d065ce04e1c9aba06db3f482110a2ce8ab39e89659ef",
       "role": "Local PDF text extraction with position-aware columns and English Tesseract OCR fallback. Used by supplier drum imports in this build.",
       "exports": [
+        "MAX_DOCUMENT",
+        "MAX_PAGES",
         "Progress",
-        "readCatalogue"
+        "closePage",
+        "readCatalogue",
+        "renderPage"
       ],
       "imports": [
         "../store/schema",
@@ -1485,8 +1620,8 @@
     },
     {
       "path": "src/import/drum-catalogue.ts",
-      "bytes": 2849,
-      "sha256": "50c2e4da68c7189b595ffdfcb6fd66fce708d6e94ea07fbad6d93b30c89b208b",
+      "bytes": 2853,
+      "sha256": "ebf2705cba28b05b601908195c5a3485e59b90e3e198f3f2e07dec217b276e9d",
       "role": "Supplier drum CSV/XLSX import or explicitly labelled/unit-qualified PDF/image text extraction. Candidate values require review before activation.",
       "exports": [
         "extractDrumSpecifications",
@@ -1501,13 +1636,17 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 15752,
-      "sha256": "859ecc90eb691087e552825f51b274c725b850a4f9bdd4917916ed5d5cff93e1",
+      "bytes": 17085,
+      "sha256": "7fff84960aa139908dbee10acc0569ae5f1ad300d682367963b6fac6849ac26a",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "exports": [
+        "Box",
         "EquipmentRead",
         "Proposal",
+        "asFraction",
         "catalogueFromPages",
+        "dot",
+        "locate",
         "mergeCatalogue",
         "mergePanels",
         "mergeSizing",
@@ -1520,7 +1659,8 @@
         "../engine/loads",
         "../engine/sheet",
         "../store/schema",
-        "./load-list"
+        "./load-list",
+        "./parse"
       ],
       "runtime": true
     },
@@ -1585,9 +1725,9 @@
     },
     {
       "path": "src/import/parse.ts",
-      "bytes": 10114,
-      "sha256": "05d0dcbaeeb527b38c8d77b33c6b143cbcc4445cb75dcfc01dc3754e60b36649",
-      "role": "Delimited text and cable-field extraction helpers shared with document reading; electrical catalogue UI is archived.",
+      "bytes": 11522,
+      "sha256": "d9f321e2fd11a12fcd4b070c433c91b697d8e1edbfffacbcfb704849fa6acd30",
+      "role": "Delimited text and cable-field extraction helpers shared with document reading, and ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs); electrical catalogue UI is archived.",
       "exports": [
         "MAX_COLS",
         "MAX_ROWS",
@@ -1595,6 +1735,7 @@
         "blankRating",
         "extractCandidates",
         "extractPositionedTable",
+        "ocrLines",
         "parseDelimited",
         "parseTable",
         "reviewProblems"
@@ -1633,6 +1774,23 @@
         "traceFeeders"
       ],
       "imports": [],
+      "runtime": true
+    },
+    {
+      "path": "src/import/rating-table.ts",
+      "bytes": 21992,
+      "sha256": "78e506e4359c6cd8f710197418a68afe02a57e5535f3a672517450b214f0a865",
+      "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view.",
+      "exports": [
+        "catalogueFromTables"
+      ],
+      "imports": [
+        "../engine/loads",
+        "../engine/sheet",
+        "./equipment",
+        "./parse",
+        "./vocabulary"
+      ],
       "runtime": true
     },
     {
@@ -1681,6 +1839,42 @@
       "runtime": true
     },
     {
+      "path": "src/import/vocabulary.ts",
+      "bytes": 7967,
+      "sha256": "3789c654195eaa3459b6cd49eb5e4dab3c11d602b8e9d58cd20c7e3ad7475eb4",
+      "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix).",
+      "exports": [
+        "Field",
+        "fieldsIn",
+        "fold"
+      ],
+      "imports": [],
+      "runtime": true
+    },
+    {
+      "path": "src/import/webpage.ts",
+      "bytes": 15486,
+      "sha256": "aa44ef381f4c407b6151fddded11dfa0381230dffa3fa6a52aae986d35a29dcf",
+      "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright.",
+      "exports": [
+        "MAX_PAGE",
+        "catalogueFromDatasheet",
+        "catalogueFromText",
+        "catalogueFromWeb",
+        "pageText",
+        "redirectTarget"
+      ],
+      "imports": [
+        "../engine/loads",
+        "../engine/sheet",
+        "../store/schema",
+        "./equipment",
+        "./parse",
+        "./rating-table"
+      ],
+      "runtime": true
+    },
+    {
       "path": "src/main.tsx",
       "bytes": 224,
       "sha256": "c220a3ab5064e4621ad7620b6e24e3c7be3bcf838b3f52c427712873756b7d81",
@@ -1696,11 +1890,12 @@
     },
     {
       "path": "src/store/project.ts",
-      "bytes": 1809,
-      "sha256": "64ffc298b9e65bcc44dd2f4ee0c6ac98e007a59bcf8eb2e8df4143e738ca2664",
-      "role": "Per-tab sessionStorage persistence (a new tab starts blank), removal of the old IndexedDB device copy, safe backup import and browser downloads.",
+      "bytes": 2219,
+      "sha256": "d616a4c0fc1047738ab25a8c5ed22935efcb4c096e72311b1b45ba94732c93eb",
+      "role": "Tab-scoped sessionStorage autosave and erasure, targeted cleanup of legacy IndexedDB project keys, validated backup import and browser downloads.",
       "exports": [
         "autosaveProject",
+        "clearSavedProject",
         "downloadFile",
         "forgetDeviceCopy",
         "openProject",
@@ -1714,8 +1909,8 @@
     },
     {
       "path": "src/store/schema.ts",
-      "bytes": 7585,
-      "sha256": "fcbc78ddbf77b991f30c8cc03613f4d4be156cae295922c11f1331c33b9eb4b4",
+      "bytes": 7610,
+      "sha256": "d2dad78c093b0d3d98e997767e4279b53ec6bde0062787533cdfadcab803d040",
       "role": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
       "exports": [
         "BendGuidance",
@@ -1745,8 +1940,8 @@
     },
     {
       "path": "src/ui/AiPicker.tsx",
-      "bytes": 1748,
-      "sha256": "6f02ad380f5e59a0e13027ee8ea105e3c4377bc8814c31df67434a184dc69c6b",
+      "bytes": 2027,
+      "sha256": "170d72ec677e69529c813f177ed6e2357688ab9d49441e6cc274d6e1b3709fa2",
       "role": "Project configuration.",
       "exports": [
         "useAi"
@@ -1759,8 +1954,8 @@
     },
     {
       "path": "src/ui/App.tsx",
-      "bytes": 7142,
-      "sha256": "b3b7fdc2434f0cd10db2deaf2650c612b8a74f1a0a9954575d0e14f2dd60061b",
+      "bytes": 7719,
+      "sha256": "35830c48800117e089705da5b459b9d52a8438efd8672b977fec8c5b5264b285",
       "role": "Four active tabs (Single cable, Load list, Cable sizing, Drums), undo/redo controls with global Ctrl/⌘+Z handling, keyboard-shortcut sheet, project name, backup controls, toast messages and the print-only Report root. Includes the light/dark theme toggle. The project dialog (project-name button) renames the project and offers \"Start a new project\" with a confirm step.",
       "exports": [
         "App"
@@ -1780,8 +1975,8 @@
     },
     {
       "path": "src/ui/Assistant.tsx",
-      "bytes": 4421,
-      "sha256": "dbb9f2236d78ba56acbb751dde0ce1857ffec621d13d70d354a8d64599981cd3",
+      "bytes": 4321,
+      "sha256": "514d224ac38da5d0524a3ad2de7b7bf69281fcb77f88842c111e0a80d0cf6063",
       "role": "Project configuration.",
       "exports": [
         "Assistant"
@@ -1814,9 +2009,9 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 11635,
-      "sha256": "4b4a5dc7905bc20d05a981aaa2c9e90782d4e3a6285971c652e114ca22655b81",
-      "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, tick to add).",
+      "bytes": 20937,
+      "sha256": "4f42d180334e2884fe3f33acaf6a6c1a5bfaa4fe9fb300a77f36e0ed304d394b",
+      "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
       ],
@@ -1828,6 +2023,8 @@
         "../import/document",
         "../import/equipment",
         "../import/load-list",
+        "../import/parse",
+        "../import/webpage",
         "../store/schema",
         "./AiPicker",
         "./state",
@@ -1985,8 +2182,8 @@
     },
     {
       "path": "src/ui/Schematic.tsx",
-      "bytes": 6833,
-      "sha256": "c76780df74f9fb77900a067717f6d64310532fdf335058b6ffe31bda1bee4d00",
+      "bytes": 6835,
+      "sha256": "5f3b82bc162f1785c380769311437210718ad91eeeae2f80709b50278439cae6",
       "role": "Review dialog for circuits read from a schematic: tick/untick rows, page and source text per row, worked-out values in italics with their reason, notes (spares skipped, unsupported voltages, DC, unticked fed-from feeders), Create load list / Add to current list. Opens even when no circuits are recognised, explaining why and showing the text that was read; a collapsible \"Text read from the drawing\" panel is always available.",
       "exports": [
         "SchematicReview"
@@ -2045,8 +2242,8 @@
     },
     {
       "path": "src/ui/app.css",
-      "bytes": 100671,
-      "sha256": "3164dbf589cd89f48054c80383969788c5dbeb4af71e18b6b8dfedb722cbbc9b",
+      "bytes": 101923,
+      "sha256": "7e89a7ab633d97049d2ef61c898a042997bdb00ea2aa8c43254c4dd462c72554",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -2072,15 +2269,16 @@
     },
     {
       "path": "src/ui/state.ts",
-      "bytes": 9701,
-      "sha256": "c00c7c369c8f0be06ac1192137fd282a4f98de64f2164d480c5a278535029104",
-      "role": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced autosave and a BroadcastChannel warning when another tab saves the same project. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
+      "bytes": 9950,
+      "sha256": "32a20b2d6421c80b369649a881cf47781ae8b21a6fba8f743ab3dfaa753d9673",
+      "role": "Signals, computed single/list/drum results, input mutations, whole-project undo/redo history (300 steps, typing in one cell within 1 s is one step, not persisted), load-list view state (filter, search, selection, inspected row), debounced tab-scoped autosave and explicit erasure. Also holds the light/dark theme signal (default light, stored in localStorage). fresh() is a neutral empty workspace named \"Untitled project\"; newProject() replaces the project with it in one undoable step and resets the load-list view state.",
       "exports": [
         "ListFilter",
         "Tab",
         "acceptAll",
         "cableGroups",
         "catalogueIndex",
+        "clearTabData",
         "drumPlan",
         "exportExcel",
         "exporting",
@@ -2136,8 +2334,8 @@
     },
     {
       "path": "tests/ai.test.ts",
-      "bytes": 4594,
-      "sha256": "1bc22eedcc92bd246d56231bbe78fb8120f8fd1cbc9f4263bfb53535cd995717",
+      "bytes": 6209,
+      "sha256": "b3d8aab6c852c27e72305f516c3cc3f5998a7108c478e762ea68e94e4d08e972",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2151,6 +2349,8 @@
         "keeps only values found in a quote that is really in the drawing",
         "rejects replies that are not a circuit list",
         "only talks to a model on this computer",
+        "sends the prompt only after the local-only check and refuses redirects on the POST",
+        "requires confirmation of on-device LM Studio routing before sending a prompt",
         "briefs the model with the panel tree, every row and its issues, all from the engine",
         "keeps only fixes for real rows and input columns, cleaned like an import, never a cable run",
         "asks only a model on this computer"
@@ -2252,8 +2452,8 @@
     },
     {
       "path": "tests/hardening.test.ts",
-      "bytes": 7914,
-      "sha256": "a4ed262062ced97208ec13637d37687735c2c8500ac5a524087aa4d6f28e3678",
+      "bytes": 9954,
+      "sha256": "ee5d55236528475996b98dfdef6214a4e25e751878b9841e724f54bef1c9d4fc",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2272,6 +2472,7 @@
       "tests": [
         "never writes Infinity or NaN as a cached Excel number",
         "strips characters XML 1.0 forbids from typed text",
+        "keeps a panel name with $ signs as written",
         "treats hex, binary and Infinity spellings as invalid entries",
         "survives extreme magnitudes without throwing",
         "caps long imported text so autosave keeps working",
@@ -2281,7 +2482,9 @@
         "marks hostile fault inputs invalid or blank, never non-finite",
         "flags a device or CPC outside the workbook lists",
         "exports fault inputs as entered and keeps device names as text",
-        "moves step06 and step07 saved fault inputs to their step08 columns once"
+        "moves step06 and step07 saved fault inputs to their step08 columns once",
+        "serves the page CSP plus frame-ancestors from both hosts",
+        "sends the same protective headers from both hosts"
       ],
       "runtime": false
     },
@@ -2312,8 +2515,8 @@
     },
     {
       "path": "tests/loads.test.ts",
-      "bytes": 16519,
-      "sha256": "04170df6f0e91612595d3203e30ad4a650ef5aa01cf076c46e42b4ce8324b99a",
+      "bytes": 31894,
+      "sha256": "0d100fbae396567c85c5829fa26de151d347b30e95d983507896c769ef66f52f",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2323,6 +2526,9 @@
         "../src/export/equipment-layout",
         "../src/import/equipment",
         "../src/import/load-list",
+        "../src/import/parse",
+        "../src/import/rating-table",
+        "../src/import/webpage",
         "../src/store/schema",
         "../src/ui/state",
         "exceljs",
@@ -2341,6 +2547,22 @@
         "exports a workbook that imports back the same",
         "retains template reactive formula and expands the summary past longer panels",
         "lets old projects open with an empty load list",
+        "keeps table cells apart and drops scripts",
+        "reads label/value pairs, converts horsepower and keeps ranges as written",
+        "finds where a saved search-result page forwards to, and leaves real pages alone",
+        "reads a maker's sheet: model heading, supply voltage range, copyright brand; skips signal inputs, classes and losses",
+        "reads a printed shop page: split ligatures, wrapped labels, \"|\" separators, maker from the title",
+        "reads stacked headings: model column, full-load efficiency, In not Is/In, poles from sub-headings",
+        "reads kW and hp, current per voltage, percent power factor; the series over a frame-only table is the model",
+        "prefers catalogue rows over one product read from the whole file",
+        "takes the printed voltage the rows work out to, skips no-load current and flags rows that do not add up",
+        "reads a single-phase table from its values when no phase is printed",
+        "tells apart one model printed with other values on two pages, and drops a row printed twice",
+        "tells apart one frame at several outputs by its kW; a type is the model and a numeric part number the configuration",
+        "reads headings in other languages and takes the product name printed over a size-only table",
+        "finds kW, In, efficiency and power factor by the values alone when no heading is understood",
+        "reads a scanned table from OCR word boxes",
+        "finds where values are printed when a reader kept no positions",
         "finds labelled values and checks them against the page",
         "flags values from the local model that are not on the page"
       ],
@@ -2368,6 +2590,24 @@
         "reads an equipment register with a worksheet per panel named in words",
         "keeps identical loads on different panels",
         "flags a load whose list In (A) is far from the calculated Ib, and reads 230 V as single-phase"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/release.test.mjs",
+      "bytes": 878,
+      "sha256": "3678ceb05255b9869416e2bfa58ea10fd0963e4a5d901c9a4b26f07eb64d8641",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../scripts/verify-vendor.mjs",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "vitest"
+      ],
+      "tests": [
+        "keeps unlisted documents and linked files out of the static release"
       ],
       "runtime": false
     },
@@ -2479,6 +2719,13 @@
       "runtime": false
     },
     {
+      "path": "vercel.json",
+      "bytes": 1310,
+      "sha256": "ed93a1b0db720fb67160083dc7e36b77031354ddb67fd26cadaa176214a80f1b",
+      "role": "Project configuration.",
+      "runtime": false
+    },
+    {
       "path": "vitest.config.ts",
       "bytes": 121,
       "sha256": "58111f84737d2ce00ac9e6c7ac4151cb044e0e12b96564136409fc1868f0639b",
@@ -2494,6 +2741,12 @@
     {
       "from": "scripts/build.mjs",
       "to": "scripts/dkg.mjs",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "scripts/build.mjs",
+      "to": "scripts/verify-vendor.mjs",
       "relation": "imports",
       "resolved": true
     },
@@ -2521,6 +2774,12 @@
       "from": "scripts/build.mjs",
       "to": "node:path",
       "relation": "external"
+    },
+    {
+      "from": "scripts/dkg.mjs",
+      "to": "scripts/verify-vendor.mjs",
+      "relation": "imports",
+      "resolved": true
     },
     {
       "from": "scripts/dkg.mjs",
@@ -2580,6 +2839,16 @@
     {
       "from": "scripts/verify-vendor.mjs",
       "to": "node:fs/promises",
+      "relation": "external"
+    },
+    {
+      "from": "scripts/verify-vendor.mjs",
+      "to": "node:path",
+      "relation": "external"
+    },
+    {
+      "from": "scripts/verify-vendor.mjs",
+      "to": "node:url",
       "relation": "external"
     },
     {
@@ -2810,6 +3079,12 @@
       "resolved": true
     },
     {
+      "from": "src/import/equipment.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
       "from": "src/import/load-list.ts",
       "to": "src/engine/sheet.ts",
       "relation": "imports",
@@ -2863,6 +3138,36 @@
       "resolved": true
     },
     {
+      "from": "src/import/rating-table.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/rating-table.ts",
+      "to": "src/engine/sheet.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/rating-table.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/rating-table.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/rating-table.ts",
+      "to": "src/import/vocabulary.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
       "from": "src/import/schematic-read.ts",
       "to": "src/import/document.ts",
       "relation": "imports",
@@ -2912,6 +3217,42 @@
     {
       "from": "src/import/schematic.ts",
       "to": "src/import/raster.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/engine/sheet.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/store/schema.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/import/rating-table.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -3120,6 +3461,18 @@
     {
       "from": "src/ui/Catalogue.tsx",
       "to": "src/import/load-list.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
+      "to": "src/import/webpage.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -3942,6 +4295,24 @@
     },
     {
       "from": "tests/loads.test.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/loads.test.ts",
+      "to": "src/import/rating-table.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/loads.test.ts",
+      "to": "src/import/webpage.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/loads.test.ts",
       "to": "src/store/schema.ts",
       "relation": "imports",
       "resolved": true
@@ -3987,6 +4358,32 @@
     },
     {
       "from": "tests/panels.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
+      "from": "tests/release.test.mjs",
+      "to": "scripts/verify-vendor.mjs",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/release.test.mjs",
+      "to": "node:fs/promises",
+      "relation": "external"
+    },
+    {
+      "from": "tests/release.test.mjs",
+      "to": "node:os",
+      "relation": "external"
+    },
+    {
+      "from": "tests/release.test.mjs",
+      "to": "node:path",
+      "relation": "external"
+    },
+    {
+      "from": "tests/release.test.mjs",
       "to": "vitest",
       "relation": "external"
     },
@@ -4116,52 +4513,94 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-18T08:15:30.997Z",
+  "updatedAt": "2026-11-19T02:31:01.968Z",
   "history": [
     {
-      "at": "2026-11-18T07:02:25.858Z",
+      "at": "2026-11-18T17:30:30.808Z",
       "added": [],
       "modified": [
+        "AGENTS.md",
+        "docs/project-knowledge.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-18T17:30:31.517Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-18T17:36:35.522Z",
+      "added": [],
+      "modified": [
+        "src/import/webpage.ts",
+        "src/ui/Catalogue.tsx",
+        "tests/loads.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-18T17:36:36.303Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T01:29:27.048Z",
+      "added": [],
+      "modified": [
+        "src/import/document.ts",
+        "src/import/equipment.ts",
+        "src/import/parse.ts",
+        "src/import/rating-table.ts",
+        "src/import/webpage.ts",
+        "src/ui/Catalogue.tsx",
+        "src/ui/app.css",
+        "tests/loads.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T01:29:27.892Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-19T01:31:55.998Z",
+      "added": [],
+      "modified": [
+        "src/ui/Catalogue.tsx",
         "src/ui/app.css"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-18T07:03:10.937Z",
+      "at": "2026-11-19T01:33:34.673Z",
       "added": [],
       "modified": [
-        "docs/verification.json"
+        "src/ui/Catalogue.tsx"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-18T07:03:34.196Z",
+      "at": "2026-11-19T01:35:19.072Z",
       "added": [],
       "modified": [
         "AGENTS.md",
-        "README.md"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-18T07:03:50.423Z",
-      "added": [],
-      "modified": [
         "docs/project-knowledge.json"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-18T07:10:32.302Z",
-      "added": [],
-      "modified": [
-        "src/export/equipment-layout.ts",
-        "tests/loads.test.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-18T07:10:33.079Z",
+      "at": "2026-11-19T01:35:19.792Z",
       "added": [],
       "modified": [
         "docs/verification.json"
@@ -4169,55 +4608,26 @@
       "removed": []
     },
     {
-      "at": "2026-11-18T07:56:22.835Z",
-      "added": [],
-      "modified": [
-        "src/export/equipment-layout.ts",
-        "src/export/equipment.ts",
-        "tests/loads.test.ts"
+      "at": "2026-11-19T02:31:01.152Z",
+      "added": [
+        "src/import/vocabulary.ts"
       ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-18T07:56:23.624Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-18T07:56:59.584Z",
-      "added": [],
       "modified": [
         "AGENTS.md",
-        "README.md",
-        "docs/project-knowledge.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-18T08:15:24.332Z",
-      "added": [],
-      "modified": [
-        "src/export/equipment.ts",
+        "docs/project-knowledge.json",
+        "src/import/document.ts",
+        "src/import/equipment.ts",
+        "src/import/parse.ts",
+        "src/import/rating-table.ts",
         "tests/loads.test.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-18T08:15:25.120Z",
+      "at": "2026-11-19T02:31:01.968Z",
       "added": [],
       "modified": [
         "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-18T08:15:30.997Z",
-      "added": [],
-      "modified": [
-        "AGENTS.md"
       ],
       "removed": []
     }

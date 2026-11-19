@@ -76,7 +76,7 @@ export async function fillTemplate(template:ArrayBuffer|Uint8Array,rows:readonly
  for(const [k,name] of names.entries()){
   const {xml,last}=fillSheet(sheet,rows.filter(r=>!isBlankRow(r)&&r.C.trim()===panels[k]),cached);
   if(filter)filters+=filter.replace('localSheetId="0"',`localSheetId="${k}"`).replace(/&apos;Cable Sizing&apos;!(\$A\$1:\$[A-Z]{1,3}\$)197/,(_,range:string)=>`${quoted(name)}!${range}${last}`);
-  if(!k){zip.file(path,xml);tags+=sheetTag.replace('name="Cable Sizing"',`name="${esc(name)}"`);continue;}
+  if(!k){zip.file(path,xml);tags+=sheetTag.replace('name="Cable Sizing"',()=>`name="${esc(name)}"`);continue;}
   // ExcelJS (this app's own import) only reads worksheet parts named sheetN.xml.
   const part=`${dir}sheet${lastSheet+k}.xml`,rid=`rIdPanel${k}`;
   zip.file(part,xml.replace(/tabSelected="(true|1)"/,'tabSelected="false"'));
@@ -95,8 +95,8 @@ export async function fillTemplate(template:ArrayBuffer|Uint8Array,rows:readonly
  }
  // Sheets after the copies move along, so their sheet-local names (filters) shift too.
  // Sheet ids follow the tab order, since some readers (ExcelJS) list sheets by id.
- let sid=0;wb=wb.replace(sheetTag,tags).replace(/(<sheet [^>]*sheetId=")\d+"/g,(_,a:string)=>`${a}${++sid}"`).replace(/localSheetId="(\d+)"/g,(m,n:string)=>+n>0?`localSheetId="${+n+names.length-1}"`:m);
- if(filter)wb=wb.replace(filter,filters);
+ let sid=0;wb=wb.replace(sheetTag,()=>tags).replace(/(<sheet [^>]*sheetId=")\d+"/g,(_,a:string)=>`${a}${++sid}"`).replace(/localSheetId="(\d+)"/g,(m,n:string)=>+n>0?`localSheetId="${+n+names.length-1}"`:m);
+ if(filter)wb=wb.replace(filter,()=>filters);
  zip.file('xl/workbook.xml',wb);zip.file('xl/_rels/workbook.xml.rels',newRels);zip.file('[Content_Types].xml',newTypes);
  return zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
 }

@@ -11,7 +11,7 @@ export function extractDrumSpecifications(pages:PageEvidence[],name:string):Drum
   for(const text of blocks) {
    const code=text.match(/(?:Drum\s+(?:code|model|type)|Model\s*(?:code|number))\s*[:#]\s*([^\n\r]+)/i)?.[1]?.trim();
    if(!code)continue;
-   const number=(label:string,unit:string)=>{const m=text.match(new RegExp(`(?:${label})\\s*(?:\\([^)]*\\))?\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)\\s*${unit}\\b`,'i'));return m?.[1]?+m[1]:null;};
+   const number=(label:string,unit:string)=>{const m=text.match(new RegExp(`(?:${label})\\s*(?:\\([^)]*\\)\\s*)?(?:[:=]\\s*)?(\\d+(?:\\.\\d+)?)\\s*${unit}\\b`,'i'));return m?.[1]?+m[1]:null;};
    const flangeMm=number('Flange (?:diameter|dia\\.?)','mm'),barrelMm=number('(?:Barrel|Hub) (?:diameter|dia\\.?)','mm'),widthMm=number('(?:Winding|Traverse|Internal) width','mm'),maxLoadKg=number('(?:Max(?:imum)?\\.? (?:cable )?(?:load|payload)|Cable payload)','kg'),tareKg=number('(?:Tare(?: weight)?|Empty drum weight)','kg');
    if(flangeMm===null||barrelMm===null||widthMm===null||maxLoadKg===null||tareKg===null)continue;
    const capacity=number('(?:Cable |Winding )?capacity','m')??0,od=number('(?:Rated cable OD|Cable (?:OD|diameter))','mm');

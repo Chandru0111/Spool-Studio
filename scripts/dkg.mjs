@@ -4,10 +4,11 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
+import {publicFiles} from './verify-vendor.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const destination=path.join(root,'spool-studio.dkg');
 const roots=['src','scripts','docs','tests','public','legacy'];
-const rootFiles=['AGENTS.md','README.md','package.json','package-lock.json','tsconfig.json','vitest.config.ts','.gitignore'];
+const rootFiles=['AGENTS.md','README.md','package.json','package-lock.json','tsconfig.json','vitest.config.ts','vercel.json','.vercelignore','.gitignore'];
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const readJSON=async(file,fallback=null)=>{try{return JSON.parse(await fs.readFile(path.join(root,file),'utf8'));}catch(error){if(error.code==='ENOENT')return fallback;throw error;}};
 async function paths(){const out=[];async function walk(rel){for(const d of (await fs.readdir(path.join(root,rel),{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){if(d.name.startsWith('.')||d.name.endsWith('.tmp'))continue;const p=`${rel}/${d.name}`;if(d.isDirectory())await walk(p);else if(d.isFile())out.push(p);}}for(const r of roots)try{await walk(r);}catch(e){if(e.code!=='ENOENT')throw e;}for(const p of rootFiles)try{await fs.access(path.join(root,p));out.push(p);}catch{}return out.sort();}
@@ -18,11 +19,13 @@ function inspectCode(file,text){const source=ts.createSourceFile(file,text,ts.Sc
  if(ts.isCallExpression(n)){if(n.expression.kind===ts.SyntaxKind.ImportKeyword&&n.arguments[0]&&ts.isStringLiteral(n.arguments[0]))imports.add(n.arguments[0].text);if(ts.isIdentifier(n.expression)&&['it','test'].includes(n.expression.text)&&n.arguments[0]&&ts.isStringLiteral(n.arguments[0]))tests.push(n.arguments[0].text);}ts.forEachChild(n,visit);}
  visit(source);return {imports:[...imports].sort(),exports:[...exports].sort(),tests};}
 export async function snapshot(){const knowledge=await readJSON('docs/project-knowledge.json',{}),names=await paths(),nameSet=new Set(names),files=[],edges=[];
- for(const file of names){const bytes=await fs.readFile(path.join(root,file));const record={path:file,bytes:bytes.length,sha256:hash(bytes),role:knowledge.modules?.[file]??(file.startsWith('tests/')?'Regression test or fixture.':file.startsWith('public/')?'Local static asset.':file.startsWith('docs/')?'Project documentation.':'Project configuration.')};
+ for(const file of names){
+ if(file.startsWith('public/')?!publicFiles.includes(file.slice(7)):/\.(?:pdf|xlsx?|xlsm|dwg|dxf|pem|key|spool\.json)$/i.test(file))continue;
+ const bytes=await fs.readFile(path.join(root,file));const record={path:file,bytes:bytes.length,sha256:hash(bytes),role:knowledge.modules?.[file]??(file.startsWith('tests/')?'Regression test or fixture.':file.startsWith('public/')?'Local static asset.':file.startsWith('docs/')?'Project documentation.':'Project configuration.')};
  if(/\.(?:tsx?|mjs)$/.test(file)){const code=inspectCode(file,bytes.toString('utf8'));record.exports=code.exports;record.imports=code.imports;if(code.tests.length)record.tests=code.tests;for(const spec of code.imports){if(spec.startsWith('.')){const base=path.posix.normalize(path.posix.join(path.posix.dirname(file),spec)),target=[base,`${base}.ts`,`${base}.tsx`,`${base}.mjs`,`${base}.json`,`${base}/index.ts`].find(p=>nameSet.has(p));edges.push({from:file,to:target??spec,relation:'imports',resolved:!!target});}else edges.push({from:file,to:spec,relation:'external'});}}
  files.push(record);}
  const built=new Set();function walk(file){if(built.has(file))return;built.add(file);for(const e of edges)if(e.from===file&&e.relation==='imports'&&e.resolved)walk(e.to);}walk('src/main.tsx');for(const f of files)f.runtime=built.has(f.path);
- const sourceFingerprint=hash(files.filter(f=>/^(src|scripts|tests|public)\//.test(f.path)||['package.json','package-lock.json','tsconfig.json','vitest.config.ts'].includes(f.path)).map(f=>`${f.path}\0${f.sha256}`).join('\n'));
+ const sourceFingerprint=hash(files.filter(f=>/^(src|scripts|tests|public)\//.test(f.path)||['package.json','package-lock.json','tsconfig.json','vitest.config.ts','vercel.json','.vercelignore'].includes(f.path)).map(f=>`${f.path}\0${f.sha256}`).join('\n'));
  const packageInfo=await readJSON('package.json',{}),data=await readJSON('src/data/sizing-tables.json',{}),fixture=await readJSON('tests/fixtures/excel-crosscheck.json',{}),verification=await readJSON('docs/verification.json');
  const graph={format:'spool-development-knowledge-graph',schemaVersion:1,project:{name:packageInfo.name,version:packageInfo.version,root:'.'},sourceFingerprint,readFirst:['knowledge.scopeDecision','knowledge.quickStart','knowledge.invariants','knowledge.changeGuide','verification'],knowledge,sourceData:{...data.source,columns:data.columns?.length,ratings:data.ratings?.reduce((n,b)=>n+b.rows.length,0),ratingBlocks:data.ratings?.length,temperatureRows:data.temperature?.length,groupingKeys:Object.keys(data.grouping??{}).length,soilRows:data.soil?.length},runtime:{entry:'src/main.tsx',modules:[...built].sort(),dependencies:packageInfo.dependencies,commands:packageInfo.scripts},tests:{cases:files.flatMap(f=>(f.tests??[]).map(name=>({file:f.path,name}))),excelFixture:{path:'tests/fixtures/excel-crosscheck.json',rows:fixture.rows?.length,provenance:fixture.note}},verification:verification?{...verification,current:verification.sourceFingerprint===sourceFingerprint}:{status:'not recorded',current:false},files,edges};
  return graph;

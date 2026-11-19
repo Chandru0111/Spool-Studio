@@ -7,3 +7,16 @@ tmp/
 graphify-out/
 samples/
 outputs/
+.vercel/
+.env
+.env.*
+*.pem
+*.key
+*.spool.json
+*.xlsx
+*.xls
+*.xlsm
+*.pdf
+*.dxf
+*.dwg
+!public/templates/cable-sizing.xlsx
