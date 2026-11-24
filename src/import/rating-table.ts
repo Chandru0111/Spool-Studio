@@ -1,8 +1,9 @@
 import {clip} from '../engine/sheet';
 import {emptyEntry,num,type CatalogueKey} from '../engine/loads';
 import {asFraction,dot,verify,type Box,type Proposal} from './equipment';
-import {fieldsIn,type Field} from './vocabulary';
+import {fieldsIn,fold,type Field} from './vocabulary';
 import type {PositionedLine,Rule} from './parse';
+import type {Param} from '../engine/equipment-types';
 
 // Catalogue rating tables: one row per motor, pump or fan, with headings stacked over a few lines above the rows
 // ("Output / kW", "Current / In at 400 V / A", "Efficiency % / 100% 75%"). Columns are found from where the numbers
@@ -100,11 +101,15 @@ function polesIn(text:string):number|null {
  const s=text.match(/\b(3000|3600|1500|1800|1000|1200|750|900)\s*(?:rpm|r\/min|min)/i);return s?SYNC[s[1]!]??null:null;
 }
 // Standards and ratings printed beside a product name, never the name itself.
-const NOT_NAME=/^(?:IEC|IE\d?|IP\d+|IC\d+|IM\w*|NEMA|TEFC|TENV|ODP|ATEX|EX|CE|UL|CSA|EN|ISO|DIN|VDE|GB|AC|DC)$/;
+const NOT_NAME=/^(?:IEC|IE|IP\d+|IC\d+|IM\w*|NEMA|TEFC|TENV|ODP|ATEX|EX|CE|UL|CSA|EN|ISO|DIN|VDE|GB|AC|DC)$/;
+// An efficiency class is part of a series name ("AX1 IE3" and "AX1 IE4" are two series), but never a name alone.
+const IE_CLASS=/^IE\d$/;
 // The product name printed over a table ("OMSR 4-POLE | 1500 RPM" gives "OMSR"), for tables whose columns name only
 // sizes or codes: the code-like words (capitals with digits or a hyphen, or a short capital word) on the nearest short
 // line above that starts at the table's left edge, leaving out ratings, poles, standards and field names. The name is
-// taken as printed, from its first such word to its last ("OMT1C IE3 RW 8-POLE" gives "OMT1C IE3 RW").
+// taken as printed, from its first such word to its last ("OMT1C IE3 RW 8-POLE" gives "OMT1C IE3 RW"). A heading in
+// capitals ("AUXILIARY FANS") is a section title, not a name: a long capital word that is no field name, with no code
+// beside it, says so.
 function titleName(around:readonly Cell[][],left:number,right:number):{text:string;box:Cell}|undefined {
  for(const l of around){
   // A title is a few pieces at the left (a heading row spreads across the table); marks out at the right edge do not count.
@@ -112,6 +117,8 @@ function titleName(around:readonly Cell[][],left:number,right:number):{text:stri
   for(const cell of l){
    const words=cell.text.split(/[\s|,;:&()]+/).filter(w=>/^[A-Z0-9][A-Z0-9.\-/]*$/.test(w)&&/[A-Z]/.test(w)&&w.length>=2&&w.length<=20&&
     (/\d/.test(w)||w.replace(/[^A-Z]/g,'').length<=5)&&!/^\d+(?:[.,]\d+)?[A-Z%]{0,3}$/.test(w)&&!/\d\s*-?\s*POL/.test(w)&&!NOT_NAME.test(w)&&!fieldsIn(w).size);
+   if(!words.some(w=>!IE_CLASS.test(w)))continue;
+   if(!words.some(w=>/\d/.test(w))&&cell.text.split(/[\s|,;:&()]+/).some(w=>/^\p{Lu}{6,}$/u.test(w)&&!fieldsIn(w).size))continue;
    const first=words[0],last=words.at(-1);if(!first||!last)continue;
    const i=cell.text.indexOf(first),j=cell.text.lastIndexOf(last)+last.length,w=cell.x1-cell.x0,len=cell.text.length||1;
    return {text:cell.text.slice(i,j).replace(/\s*\|\s*$/,''),box:{...cell,x0:cell.x0+w*i/len,x1:cell.x0+w*j/len}};
@@ -119,8 +126,34 @@ function titleName(around:readonly Cell[][],left:number,right:number):{text:stri
  }
  return undefined;
 }
+// How a ticked catalogue-only parameter (poles, frame size, weight…) is read from a table: from a column, the poles or
+// supply frequency the reader works out for each row, or a code printed on the row or over the table ("IE3", "IP55").
+type Plan={param:Param;how:'col';col:Column}|{param:Param;how:'poles'}|{param:Param;how:'hz'}|{param:Param;how:'code';abbr:string};
+const esc=(s:string)=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+const wordsOf=(s:string)=>fold(s).trim().split(' ').filter(w=>w.length>1);
+// A ratio of two quantities ("Ia/In", "Is/I n", "M m /M n") as the numerator's letter over the denominator: "i/in".
+// A capital I and a small l look alike in most fonts (OCR reads "In" as "ln"), so they count as one letter.
+const ratioOf=(s:string)=>s.replace(/\s*\/\s*/g,'/').replace(/\b([A-Za-z])\s([a-z0-9]{1,3})\b/g,'$1$2').match(/(?<![A-Za-z])([A-Za-z])[A-Za-z0-9]{0,3}\/([A-Za-z][A-Za-z0-9]{0,3})(?![A-Za-z])/)?.slice(1).join('/').toLowerCase().replace(/l/g,'i')??'';
+// The first way that fits: a field the reader already knows (speed, poles, frame size, a name or code column); a value in
+// Hz is the supply frequency printed for the table; the one column whose heading shares a word with the label and also
+// its unit or its ratio ("Weight" in kg, "Starting current Ia/In" over "Is/In"); a code the label names in capitals
+// ("Efficiency class (IE)", "IP rating"). A heading that two columns fit equally names neither. Nothing found stays empty.
+function planOf(param:Param,cols:readonly Column[],core:ReadonlySet<Column|undefined>):Plan|undefined {
+ const f=fieldsIn(param.label),top=[...f].sort((a,b)=>b[1]-a[1])[0]?.[0];
+ if(!f.has('skip')&&top==='poles')return {param,how:'poles'};
+ if(!f.has('skip')&&(top==='speed'||top==='frame'||top==='name'||top==='code')){const col=pick(cols,top);if(col)return {param,how:'col',col};}
+ if(/^hz$/i.test(param.unit.trim())||/\bhz\b/i.test(param.label))return {param,how:'hz'};
+ const unit=param.unit.trim()?new RegExp(`(?<!\\p{L})${esc(param.unit.trim())}(?!\\p{L})`,'u'):null,ratio=ratioOf(param.label),label=wordsOf(param.label.replace(/\S*\/\S*/g,' '));
+ const fit=cols.filter(c=>!core.has(c)).map(c=>{
+  const head=c.head.join(' '),have=new Set(wordsOf(head)),hits=label.filter(w=>have.has(w)).length;
+  return {col:c,score:hits?hits+(unit?.test(head)?2:0)+(ratio&&(ratioOf(c.own.join(' '))===ratio||ratioOf(head)===ratio)?2:0):0};
+ }).filter(x=>x.score>=2).sort((a,b)=>b.score-a.score);
+ if(fit[0]&&fit[0].score!==fit[1]?.score)return {param,how:'col',col:fit[0].col};
+ const abbr=param.label.match(/(?<![A-Za-z])[A-Z]{2,3}(?![A-Za-z])/)?.[0];
+ return abbr?{param,how:'code',abbr}:undefined;
+}
 
-export function catalogueFromTables(layout:ReadonlyMap<number,readonly PositionedLine[]>,file:string,rules:ReadonlyMap<number,readonly Rule[]>=new Map()):Proposal[] {
+export function catalogueFromTables(layout:ReadonlyMap<number,readonly PositionedLine[]>,file:string,rules:ReadonlyMap<number,readonly Rule[]>=new Map(),params:readonly Param[]=[]):Proposal[] {
  const out:Proposal[]=[],seen=new Set<string>();
  for(const [page,lines] of layout){
   const cells=lines.map(cellsOf);let i=0;
@@ -262,6 +295,7 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    const volts=voltsIn(inA?.head.join(' ')??'')??(mid!==undefined&&printed.length>1?printed.reduce((a,b)=>off(b)<off(a)?b:a):printed[0]);
    const voltLine=volts?ctx.split('\n').find(l=>voltsIn(l)===volts)??'':'';
    const hzLine=hz?ctx.split('\n').find(l=>new RegExp(`\\b${hz}\\s*Hz`,'i').test(l))??'':'';
+   const plans=params.filter(p=>!p.feeds&&p.label.trim()).map(p=>planOf(p,cols,new Set([kw,hp,inA,eff,pf,un]))).filter((p):p is Plan=>!!p);
    const used:[Column|undefined,CatalogueKey][]=[[modelCol,'model'],...configCols.map(c=>[c,'config'] as [Column,CatalogueKey]),[kw,'ratedKw'],[hp,'ratedKw'],[inA,'inA'],[eff,'efficiency'],[pf,'pf'],[un,'un']];
    for(const r of rows){
     const v=read(r),{at,raw,n,kwN,hpN}=v,e=emptyEntry(),evidence:string[]=[];
@@ -282,6 +316,16 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
     e.model=clip(modelCol?raw(modelCol):title?.text??'');
     e.config=clip([...configCols.map(c=>raw(c)),e.un,phase,hz?`${hz} Hz`:'',pl?`${pl}-pole`:''].filter(Boolean).join(', '));
     e.source=clip(`${file}, page ${page}`);
+    const extra:Record<string,string>={},extraEvidence:string[]=[];
+    for(const p of plans){
+     let v='';
+     if(p.how==='col'){const t=raw(p.col),x=num(dot(t));v=x!==null?String(x):t;}
+     else if(p.how==='poles')v=pl?String(pl):'';
+     else if(p.how==='hz')v=hz??'';
+     else{const re=new RegExp(`(?<![A-Za-z])${p.abbr}\\s?(\\d{1,2})(?!\\d)`);for(const t of [...r.cells.map(c=>c.text),r.sub,...context]){const m=t.match(re);if(m){v=`${p.abbr}${m[1]}`;break;}}}
+     if(v){extra[p.param.key]=clip(v);extraEvidence.push(`${p.param.label}: ${v}`);}
+    }
+    if(Object.keys(extra).length)e.extra=extra;
     // The same table printed twice adds nothing; rows that differ are all kept for the engineer to tell apart.
     const key=JSON.stringify({...e,source:''});if(seen.has(key))continue;seen.add(key);
     if(title)evidence.push(title.box.text);
@@ -291,6 +335,7 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
     if(voltLine&&!un)evidence.push(voltLine);if(hzLine&&hzLine!==voltLine)evidence.push(hzLine);if(r.sub)evidence.push(r.sub);
     const boxes:Box[]=[...used.flatMap(([c,key])=>c&&e[key]?(at.get(c)??[]).map(x=>({key,x0:x.x0,x1:x.x1,y:x.y,h:x.h})):[]),...(title?[{key:'model' as const,x0:title.box.x0,x1:title.box.x1,y:title.box.y,h:title.box.h}]:[])];
     if(worked)evidence.push('kW, In, efficiency and power factor work out to single phase');
+    evidence.push(...extraEvidence);
     const works=implied(v,phase==='1-phase')??0,note=fits(phase==='1-phase')?'':`${e.ratedKw} kW, ${e.inA} A, efficiency ${e.efficiency} and power factor ${e.pf} work out to about ${Math.round(works)} V${phase?` (${phase})`:''}, not ${e.un}. Check In and Un on the page.`;
     const unverified=[...new Set([...verify(e,evidence.join('\n')).filter(x=>!(x==='ratedKw'&&(kwN===null||watts))),...(e.model?[]:['model' as const]),...(note?['inA','un'] as const:[])])];
     if(out.length>=5000)throw Error('The document has more than 5,000 entries. Split the file.');

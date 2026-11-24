@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "9a4892643704203e788337fbf867223cdd9d21542df2e85994893ba251ff6e2a",
+  "sourceFingerprint": "524ff296c359e81a29f64fe3db39177f75fe3f8b17a410231a596bcfae1b1df5",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -928,6 +928,18 @@
         "name": "flags a load whose list In (A) is far from the calculated Ib, and reads 230 V as single-phase"
       },
       {
+        "file": "tests/rating-table-params.test.ts",
+        "name": "fills each catalogue-only parameter from its column, the row, or the title, and keeps the efficiency class in the series name"
+      },
+      {
+        "file": "tests/rating-table-params.test.ts",
+        "name": "reads nothing extra when no parameter is ticked"
+      },
+      {
+        "file": "tests/rating-table-params.test.ts",
+        "name": "does not take a section heading in capitals for the model"
+      },
+      {
         "file": "tests/release.test.mjs",
         "name": "keeps unlisted documents and linked files out of the static release"
       },
@@ -1111,8 +1123,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-19T07:52:31.738Z",
-    "sourceFingerprint": "9e1e306ec8dbb64c352186f6f0f9f7acf64c49cb05a007253277fe2da524581e",
+    "checkedAt": "2026-11-24T09:04:09.953Z",
+    "sourceFingerprint": "524ff296c359e81a29f64fe3db39177f75fe3f8b17a410231a596bcfae1b1df5",
     "status": "passed",
     "steps": [
       {
@@ -1123,7 +1135,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  12 passed (12); Tests  145 passed (145)"
+        "summary": "Test Files  14 passed (14); Tests  153 passed (153)"
       },
       {
         "command": "npm run build",
@@ -1136,7 +1148,7 @@
         "summary": "Verified 211 asset hashes (PDF, OCR, fonts and blank workbook) and the release file list."
       }
     ],
-    "current": false
+    "current": true
   },
   "files": [
     {
@@ -1191,7 +1203,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "a2f69e609f3c22e3a7d48fc7a09001fea29ab52c894aecfca3e0531d053ddfdb",
+      "sha256": "debb9f5f338a599e788960e1ea847c4c08a7c968b50d92506160f2bad0aefb0f",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1878,13 +1890,14 @@
     },
     {
       "path": "src/import/rating-table.ts",
-      "bytes": 25546,
-      "sha256": "497e177f7b4154d1eff7a74b08b4502d3d8981cef4acb3c979bf8015cbea22c2",
+      "bytes": 29556,
+      "sha256": "e5f340f8015fadb4d33542441dd6b4940ca0103ad2ee7a9900fbb77acbd33581",
       "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values.",
       "exports": [
         "catalogueFromTables"
       ],
       "imports": [
+        "../engine/equipment-types",
         "../engine/loads",
         "../engine/sheet",
         "./equipment",
@@ -1952,8 +1965,8 @@
     },
     {
       "path": "src/import/webpage.ts",
-      "bytes": 15549,
-      "sha256": "aecbd864e421fae03d9d3660198834131fad2e6b5369ebc1ff5bad47d4c9b142",
+      "bytes": 15708,
+      "sha256": "37582a43146ab142b4e742c4fed688d842335d1cf9e256344946edc24d0b74a4",
       "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright.",
       "exports": [
         "MAX_PAGE",
@@ -1964,6 +1977,7 @@
         "redirectTarget"
       ],
       "imports": [
+        "../engine/equipment-types",
         "../engine/loads",
         "../engine/sheet",
         "../store/schema",
@@ -2110,8 +2124,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 26495,
-      "sha256": "0089ec63cc4b12e16ed856fc54717a9e0ad178116f8c5f385bacbb2d3bff9f03",
+      "bytes": 26531,
+      "sha256": "1a10ba27a0fc770845e66839fdeb3afc27498c578aef8d008cba7825bf30af94",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
@@ -2748,6 +2762,25 @@
       "runtime": false
     },
     {
+      "path": "tests/rating-table-params.test.ts",
+      "bytes": 3115,
+      "sha256": "18694428c43bfeaf839378b5ae5bf148e2c76f9c5c411e5aa31e3d09d2010b32",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/engine/equipment-types",
+        "../src/import/parse",
+        "../src/import/rating-table",
+        "vitest"
+      ],
+      "tests": [
+        "fills each catalogue-only parameter from its column, the row, or the title, and keeps the efficiency class in the series name",
+        "reads nothing extra when no parameter is ticked",
+        "does not take a section heading in capitals for the model"
+      ],
+      "runtime": false
+    },
+    {
       "path": "tests/release.test.mjs",
       "bytes": 878,
       "sha256": "3678ceb05255b9869416e2bfa58ea10fd0963e4a5d901c9a4b26f07eb64d8641",
@@ -3311,6 +3344,12 @@
     },
     {
       "from": "src/import/rating-table.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/rating-table.ts",
       "to": "src/engine/loads.ts",
       "relation": "imports",
       "resolved": true
@@ -3384,6 +3423,12 @@
     {
       "from": "src/import/schematic.ts",
       "to": "src/import/raster.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/engine/equipment-types.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -4626,6 +4671,29 @@
       "relation": "external"
     },
     {
+      "from": "tests/rating-table-params.test.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/rating-table-params.test.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/rating-table-params.test.ts",
+      "to": "src/import/rating-table.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/rating-table-params.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/release.test.mjs",
       "to": "scripts/verify-vendor.mjs",
       "relation": "imports",
@@ -4777,10 +4845,10 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-24T05:28:31.255Z",
+  "updatedAt": "2026-11-24T09:04:10.019Z",
   "history": [
     {
-      "at": "2026-11-19T07:36:59.129Z",
+      "at": "2026-11-24T06:56:56.699Z",
       "added": [],
       "modified": [
         "src/import/rating-table.ts"
@@ -4788,58 +4856,55 @@
       "removed": []
     },
     {
-      "at": "2026-11-19T07:40:12.310Z",
+      "at": "2026-11-24T06:58:09.333Z",
       "added": [],
       "modified": [
-        "src/import/drawing-ocr.ts"
+        "src/import/parse.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-19T07:42:42.635Z",
+      "at": "2026-11-24T06:58:09.777Z",
       "added": [],
       "modified": [
-        "src/import/drawing-ocr.ts"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-19T07:43:59.577Z",
+      "at": "2026-11-24T06:58:13.339Z",
       "added": [],
       "modified": [
-        "src/import/drawing-ocr.ts",
-        "src/import/raster.ts",
-        "tests/drawing.test.ts"
+        "src/import/parse.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-19T07:45:29.637Z",
+      "at": "2026-11-24T06:58:33.491Z",
       "added": [],
       "modified": [
-        "AGENTS.md",
-        "docs/project-knowledge.json"
+        "tests/cross-check.test.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-19T07:45:48.268Z",
+      "at": "2026-11-24T06:58:44.085Z",
       "added": [],
       "modified": [
-        "docs/verification.json"
+        "src/import/parse.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-19T07:47:06.013Z",
+      "at": "2026-11-24T06:58:44.785Z",
       "added": [],
       "modified": [
-        ".gitignore"
+        "src/import/parse.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-19T07:47:18.181Z",
+      "at": "2026-11-24T06:59:39.910Z",
       "added": [],
       "modified": [
         "docs/verification.json"
@@ -4847,43 +4912,45 @@
       "removed": []
     },
     {
-      "at": "2026-11-19T07:52:19.719Z",
+      "at": "2026-11-24T06:59:52.691Z",
       "added": [],
       "modified": [
-        "tests/loads.test.ts"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-19T07:52:31.802Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T05:27:28.224Z",
+      "at": "2026-11-24T09:03:37.304Z",
       "added": [
-        "src/engine/equipment-types.ts",
-        "src/ui/TypePicker.tsx",
-        "tests/equipment-types.test.ts"
+        "tests/rating-table-params.test.ts"
       ],
       "modified": [
-        "src/engine/loads.ts",
+        "src/engine/equipment-types.ts",
+        "src/import/document.ts",
         "src/import/equipment.ts",
-        "src/store/schema.ts",
+        "src/import/parse.ts",
+        "src/import/rating-table.ts",
+        "src/import/webpage.ts",
         "src/ui/Catalogue.tsx",
-        "src/ui/app.css",
-        "tests/loads.test.ts"
+        "src/ui/TypePicker.tsx"
+      ],
+      "removed": [
+        "tests/cross-check.test.ts"
+      ]
+    },
+    {
+      "at": "2026-11-24T09:03:43.551Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-24T05:28:31.255Z",
+      "at": "2026-11-24T09:04:10.019Z",
       "added": [],
       "modified": [
-        "src/ui/TypePicker.tsx"
+        "docs/verification.json"
       ],
       "removed": []
     }
