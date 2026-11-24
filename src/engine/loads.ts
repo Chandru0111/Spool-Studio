@@ -7,8 +7,9 @@ export const emptyLoad=():LoadRow=>Object.fromEntries(LOAD_KEYS.map(k=>[k,''])) 
 export const isBlankLoad=(r:LoadRow)=>LOAD_KEYS.every(k=>!r[k].trim());
 export const CATALOGUE_KEYS=['brand','model','config','ratedKw','protA','inA','un','efficiency','pf','source'] as const;
 export type CatalogueKey=typeof CATALOGUE_KEYS[number];
-export type CatalogueRow=Record<CatalogueKey,string>;
-export const emptyEntry=():CatalogueRow=>Object.fromEntries(CATALOGUE_KEYS.map(k=>[k,''])) as CatalogueRow;
+// type: the equipment type id (equipment-types.ts); extra: values of its catalogue-only parameters, by parameter key.
+export type CatalogueRow=Record<CatalogueKey,string>&{type?:string|undefined;extra?:Record<string,string>|undefined};
+export const emptyEntry=():CatalogueRow=>Object.fromEntries(CATALOGUE_KEYS.map(k=>[k,''])) as Record<CatalogueKey,string>;
 // What a catalogue entry fills in. A value typed on the load row always wins over the catalogue.
 export const FROM_CATALOGUE=['ratedKw','protA','inA','un','efficiency','pf'] as const;
 export const TICK_KEYS=['vital','essential','nonEssential','restart'] as const;

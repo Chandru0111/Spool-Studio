@@ -2,6 +2,7 @@ import {clip,emptyRow,type SheetRow} from '../engine/sheet';
 import {DUTIES,FROM_CATALOGUE,LOAD_KEYS,TICK,TICK_KEYS,emptyEntry,emptyLoad,fillRow,indexCatalogue,isTick,num,sameText,
  DEFAULT_FACTORS,DEFAULT_MARGIN,type CatalogueIndex,type CatalogueKey,type CatalogueRow,type Duty,type Factors,type LoadKey} from '../engine/loads';
 import type {LoadPanel,PageEvidence} from '../store/schema';
+import type {EquipmentType} from '../engine/equipment-types';
 import {cleanValue,normalize,type InputTable} from './load-list';
 import type {PositionedLine} from './parse';
 
@@ -137,7 +138,29 @@ export function mergeSizing(existing:readonly SheetRow[],incoming:readonly Sheet
 // boxes: where each value is printed on its page (PDF points), for showing it in the review.
 export type Box={key:CatalogueKey;x0:number;x1:number;y:number;h:number};
 // note: why In and Un are flagged when a row's values do not work out to its voltage.
-export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean;boxes?:Box[];note?:string};
+// typeGuess: two of the picked equipment types fit the row equally well, so its type is for the engineer to choose.
+export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean;boxes?:Box[];note?:string;typeGuess?:boolean};
+const takes=(t:EquipmentType)=>new Set(t.params.map(p=>p.feeds).filter(Boolean));
+// Rows read from a catalogue the user said covers these equipment types, each holding only its ticked parameters. Every row
+// takes the type whose load list columns best match the values found on it: a value the type takes counts for it, one it
+// does not take counts against it. A tie is flagged, and the first type picked is kept until the engineer chooses.
+export function applyPick(rows:readonly Proposal[],types:readonly EquipmentType[]):Proposal[] {
+ if(!types.length)return [...rows];
+ return rows.map(p=>{
+  const found=FROM_CATALOGUE.filter(k=>p.entry[k].trim()),score=types.map(t=>{const s=takes(t);return found.reduce((n,k)=>n+(s.has(k)?1:-1),0);});
+  const top=Math.max(...score);
+  return {...p,entry:{...p.entry,type:types[score.indexOf(top)]!.id},typeGuess:score.filter(s=>s===top).length>1};
+ });
+}
+// What an entry added under an equipment type keeps: the load list values its ticked parameters fill, and the values of its
+// ticked catalogue-only parameters. Everything else the reader found is dropped, as the user asked for it to stay empty.
+export function keepPicked(e:CatalogueRow,t:EquipmentType|undefined):CatalogueRow {
+ if(!t)return e;
+ const s=takes(t),out:CatalogueRow={...e,type:t.id};for(const k of FROM_CATALOGUE)if(!s.has(k))out[k]='';
+ const extra=Object.fromEntries(t.params.flatMap(p=>{const v=e.extra?.[p.key]?.trim();return !p.feeds&&v?[[p.key,clip(v)]]:[];}));
+ if(Object.keys(extra).length)out.extra=extra;else delete out.extra;
+ return out;
+}
 const N='(\\d+(?:[.,]\\d+)?)';
 const LABELLED:[CatalogueKey,RegExp][]=[
  ['ratedKw',new RegExp(`power\\b[^\\n\\d]{0,30}${N}\\s*kW\\b`,'i')],

@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "9e1e306ec8dbb64c352186f6f0f9f7acf64c49cb05a007253277fe2da524581e",
+  "sourceFingerprint": "9a4892643704203e788337fbf867223cdd9d21542df2e85994893ba251ff6e2a",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -434,6 +434,7 @@
       "src/data/sizing-tables.json",
       "src/engine/bend-reference.ts",
       "src/engine/drums.ts",
+      "src/engine/equipment-types.ts",
       "src/engine/explain.ts",
       "src/engine/issues.ts",
       "src/engine/loads.ts",
@@ -478,6 +479,7 @@
       "src/ui/Schematic.tsx",
       "src/ui/Sheet.tsx",
       "src/ui/SingleCable.tsx",
+      "src/ui/TypePicker.tsx",
       "src/ui/app.css",
       "src/ui/components.tsx",
       "src/ui/state.ts"
@@ -632,6 +634,26 @@
       {
         "file": "tests/drawing.test.ts",
         "name": "copes with noise, huge stroke counts and thousands of words quickly"
+      },
+      {
+        "file": "tests/equipment-types.test.ts",
+        "name": "keeps built-in types well formed"
+      },
+      {
+        "file": "tests/equipment-types.test.ts",
+        "name": "reads a type defined only here, with no code change"
+      },
+      {
+        "file": "tests/equipment-types.test.ts",
+        "name": "gives each row of a mixed catalogue the type its values fit"
+      },
+      {
+        "file": "tests/equipment-types.test.ts",
+        "name": "keeps only the ticked parameters when an entry is added"
+      },
+      {
+        "file": "tests/equipment-types.test.ts",
+        "name": "saves own types and typed entries with the project, within limits"
       },
       {
         "file": "tests/hardening.test.ts",
@@ -1114,7 +1136,7 @@
         "summary": "Verified 211 asset hashes (PDF, OCR, fonts and blank workbook) and the release file list."
       }
     ],
-    "current": true
+    "current": false
   },
   "files": [
     {
@@ -1344,6 +1366,31 @@
       "runtime": true
     },
     {
+      "path": "src/engine/equipment-types.ts",
+      "bytes": 7194,
+      "sha256": "f25ce82cd4a8a8eac537acfdfa3bdc937069a9c83fbe558e5730a103fbb7a2f5",
+      "role": "Project configuration.",
+      "exports": [
+        "BUILT_IN",
+        "CUSTOM_GROUP",
+        "EquipmentType",
+        "Feed",
+        "GROUPS",
+        "MAX_PARAMS",
+        "MAX_TYPES",
+        "Param",
+        "Pick",
+        "allTypes",
+        "defaultOn",
+        "doubleFeeds",
+        "pickedTypes"
+      ],
+      "imports": [
+        "./loads"
+      ],
+      "runtime": true
+    },
+    {
       "path": "src/engine/explain.ts",
       "bytes": 2085,
       "sha256": "d19b9501a2c23db313b011e49fa1039796444f262cd0584235679a084b7d1c71",
@@ -1376,8 +1423,8 @@
     },
     {
       "path": "src/engine/loads.ts",
-      "bytes": 9243,
-      "sha256": "1648e34d4c4409f9abf91cd19e929fb2972bdce95e0f319011f7bf49104d091c",
+      "bytes": 9441,
+      "sha256": "2b7aa66b5fcbda0fd4989a9b1c885fb7f761f3a5133a8e86d578e0fb084de7c0",
       "role": "Equipment-list engine: row and catalogue shapes, catalogue index and fill (Brand + Model + Configuration), per-row kW/kVAr/load factor, panel and plant totals with operating factors and design margin, and the scenario comparison.",
       "exports": [
         "Balance",
@@ -1667,16 +1714,18 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 17085,
-      "sha256": "7fff84960aa139908dbee10acc0569ae5f1ad300d682367963b6fac6849ac26a",
+      "bytes": 18852,
+      "sha256": "7e5362a347706659f2615c7cf9fb727b2c50342f712e9935c36d11b82128452a",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "exports": [
         "Box",
         "EquipmentRead",
         "Proposal",
+        "applyPick",
         "asFraction",
         "catalogueFromPages",
         "dot",
+        "keepPicked",
         "locate",
         "mergeCatalogue",
         "mergePanels",
@@ -1687,6 +1736,7 @@
         "verify"
       ],
       "imports": [
+        "../engine/equipment-types",
         "../engine/loads",
         "../engine/sheet",
         "../store/schema",
@@ -1958,8 +2008,8 @@
     },
     {
       "path": "src/store/schema.ts",
-      "bytes": 7610,
-      "sha256": "d2dad78c093b0d3d98e997767e4279b53ec6bde0062787533cdfadcab803d040",
+      "bytes": 8755,
+      "sha256": "f0c5687b25f9ec828155cc29c472b8011b1fa4b12b964bbe2911b471ae5becb2",
       "role": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
       "exports": [
         "BendGuidance",
@@ -1968,6 +2018,7 @@
         "CatalogueRowData",
         "Drum",
         "DrumOption",
+        "EquipmentTypeData",
         "FactorData",
         "LoadPanel",
         "LoadRowData",
@@ -1981,6 +2032,7 @@
         "defaultDrum"
       ],
       "imports": [
+        "../engine/equipment-types",
         "../engine/loads",
         "../engine/sheet",
         "zod"
@@ -2058,13 +2110,14 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 20947,
-      "sha256": "86dbd8ad8e7dd237b85bfd8ba6babfe29dd7581c12736c42403fe262c9854019",
+      "bytes": 26495,
+      "sha256": "0089ec63cc4b12e16ed856fc54717a9e0ad178116f8c5f385bacbb2d3bff9f03",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
       ],
       "imports": [
+        "../engine/equipment-types",
         "../engine/loads",
         "../engine/sheet",
         "../export/equipment",
@@ -2076,8 +2129,11 @@
         "../import/webpage",
         "../store/schema",
         "./AiPicker",
+        "./TypePicker",
         "./state",
+        "@preact/signals",
         "lucide-preact",
+        "preact",
         "preact/hooks"
       ],
       "runtime": true
@@ -2290,9 +2346,27 @@
       "runtime": true
     },
     {
+      "path": "src/ui/TypePicker.tsx",
+      "bytes": 9458,
+      "sha256": "064509d26f4ca5f8914b7ebae4cdf6256274adcd0fc741fcf14f118064332104",
+      "role": "Project configuration.",
+      "exports": [
+        "FEED_NAME",
+        "TypePicker"
+      ],
+      "imports": [
+        "../engine/equipment-types",
+        "../engine/loads",
+        "./state",
+        "lucide-preact",
+        "preact/hooks"
+      ],
+      "runtime": true
+    },
+    {
       "path": "src/ui/app.css",
-      "bytes": 101923,
-      "sha256": "7e89a7ab633d97049d2ef61c898a042997bdb00ea2aa8c43254c4dd462c72554",
+      "bytes": 104222,
+      "sha256": "c72c13e4090e2d8bad255942e02bdc418839e98e465a40476691d186e6d29856",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -2485,6 +2559,29 @@
       "runtime": false
     },
     {
+      "path": "tests/equipment-types.test.ts",
+      "bytes": 3634,
+      "sha256": "52c07784c1cfe7ca65710f6a08ee07586e2762127d4a6811f17f4ff758dcee5e",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/engine/equipment-types",
+        "../src/engine/loads",
+        "../src/import/equipment",
+        "../src/store/schema",
+        "../src/ui/state",
+        "vitest"
+      ],
+      "tests": [
+        "keeps built-in types well formed",
+        "reads a type defined only here, with no code change",
+        "gives each row of a mixed catalogue the type its values fit",
+        "keeps only the ticked parameters when an entry is added",
+        "saves own types and typed entries with the project, within limits"
+      ],
+      "runtime": false
+    },
+    {
       "path": "tests/fixtures/excel-crosscheck.json",
       "bytes": 131710,
       "sha256": "504cded88c046fda851854ff14a3148ecb602ab3f2ab3f879aeb82cb02dac2a3",
@@ -2563,8 +2660,8 @@
     },
     {
       "path": "tests/loads.test.ts",
-      "bytes": 36355,
-      "sha256": "b5ef9e0902c590981211d28931f08265837a485f90afb7d5bb1fae0b48a1e577",
+      "bytes": 36364,
+      "sha256": "440a50a7e78fb239652afe9eeea98d253517a0e93dfcc73c266e81dfeb14ab49",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2937,6 +3034,12 @@
       "resolved": true
     },
     {
+      "from": "src/engine/equipment-types.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
       "from": "src/engine/explain.ts",
       "to": "src/engine/sheet.ts",
       "relation": "imports",
@@ -3109,6 +3212,12 @@
     {
       "from": "src/import/drum-catalogue.ts",
       "to": "src/import/load-list.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/equipment.ts",
+      "to": "src/engine/equipment-types.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -3345,6 +3454,12 @@
     },
     {
       "from": "src/store/schema.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/store/schema.ts",
       "to": "src/engine/loads.ts",
       "relation": "imports",
       "resolved": true
@@ -3482,6 +3597,12 @@
     },
     {
       "from": "src/ui/Catalogue.tsx",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
       "to": "src/engine/loads.ts",
       "relation": "imports",
       "resolved": true
@@ -3548,13 +3669,29 @@
     },
     {
       "from": "src/ui/Catalogue.tsx",
+      "to": "src/ui/TypePicker.tsx",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
       "to": "src/ui/state.ts",
       "relation": "imports",
       "resolved": true
     },
     {
       "from": "src/ui/Catalogue.tsx",
+      "to": "@preact/signals",
+      "relation": "external"
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
       "to": "lucide-preact",
+      "relation": "external"
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
+      "to": "preact",
       "relation": "external"
     },
     {
@@ -4012,6 +4149,34 @@
       "relation": "external"
     },
     {
+      "from": "src/ui/TypePicker.tsx",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/TypePicker.tsx",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/TypePicker.tsx",
+      "to": "src/ui/state.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/TypePicker.tsx",
+      "to": "lucide-preact",
+      "relation": "external"
+    },
+    {
+      "from": "src/ui/TypePicker.tsx",
+      "to": "preact/hooks",
+      "relation": "external"
+    },
+    {
       "from": "src/ui/components.tsx",
       "to": "lucide-preact",
       "relation": "external"
@@ -4215,6 +4380,41 @@
     },
     {
       "from": "tests/drawing.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
+      "from": "tests/equipment-types.test.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-types.test.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-types.test.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-types.test.ts",
+      "to": "src/store/schema.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-types.test.ts",
+      "to": "src/ui/state.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-types.test.ts",
       "to": "vitest",
       "relation": "external"
     },
@@ -4577,24 +4777,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-19T07:52:31.802Z",
+  "updatedAt": "2026-11-24T05:28:31.255Z",
   "history": [
-    {
-      "at": "2026-11-19T07:36:51.419Z",
-      "added": [],
-      "modified": [
-        "tests/loads.test.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-19T07:36:58.336Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-19T07:36:59.129Z",
       "added": [],
@@ -4675,6 +4859,31 @@
       "added": [],
       "modified": [
         "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T05:27:28.224Z",
+      "added": [
+        "src/engine/equipment-types.ts",
+        "src/ui/TypePicker.tsx",
+        "tests/equipment-types.test.ts"
+      ],
+      "modified": [
+        "src/engine/loads.ts",
+        "src/import/equipment.ts",
+        "src/store/schema.ts",
+        "src/ui/Catalogue.tsx",
+        "src/ui/app.css",
+        "tests/loads.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T05:28:31.255Z",
+      "added": [],
+      "modified": [
+        "src/ui/TypePicker.tsx"
       ],
       "removed": []
     }
