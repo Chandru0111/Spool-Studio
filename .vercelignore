@@ -19,6 +19,11 @@
 !/public/icon.svg
 !/public/_headers
 !/public/templates/cable-sizing.xlsx
+!/models/
+!/models/paddleocr/
+!/models/paddleocr/*/
+!/models/paddleocr/*/inference.onnx
+!/models/paddleocr/*/inference.yml
 .git/
 .vercel/
 node_modules/
