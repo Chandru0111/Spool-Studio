@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import ExcelJS from 'exceljs';
 import {balance,emptyEntry,emptyLoad,entryAt,fillRow,indexCatalogue,panelTotals,plantTotals,scenario,type LoadRow} from '../src/engine/loads';
 import {readTables} from '../src/import/load-list';
-import {catalogueFromPages,locate,mergeSizing,parseEquipmentReply,readEquipment,toSizing,verify} from '../src/import/equipment';
+import {catalogueFromPages,locate,mergeSizing,readEquipment,toSizing,verify} from '../src/import/equipment';
 import {emptyRow} from '../src/engine/sheet';
 import {Project} from '../src/store/schema';
 import {fresh} from '../src/ui/state';
@@ -348,10 +348,7 @@ describe('reading datasheets',()=>{
   expect(p!.entry).toMatchObject({model:'M-200-4P',ratedKw:'55',inA:'98.5',un:'400 V',efficiency:'0.951',pf:'0.86',config:'400 V, 3-phase, 50 Hz'});
   expect(p!.unverified).toEqual([]);expect(p!.entry.source).toBe('sheet.pdf, page 2');
  });
- it('flags values from the local model that are not on the page',()=>{
-  const reply='Here: {"rows":[{"model":"M-200-4P","configuration":"400 V, 3-phase, 50 Hz","ratedKw":"55","inA":"99","un":"400 V","efficiency":"95.1","pf":"0.86","page":2,"evidence":"Rated power 55 kW"}]}';
-  const [p]=parseEquipmentReply(reply,[{page:2,text,mode:'text',confidence:null}],'sheet.pdf');
-  expect(p!.entry.efficiency).toBe('0.951');expect(p!.unverified).toEqual(['inA']);
+ it('flags values that are not on the page',()=>{
   expect(verify({...emptyEntry(),model:'X-9'},text)).toEqual(['model']);
   // Trailing zeros on the page are the same number; a longer number is not.
   expect(verify({...emptyEntry(),pf:'0.8',inA:'13.5',efficiency:'0.9'},'cos φ 0.80, In 13.50 A, η 90.0 %')).toEqual([]);

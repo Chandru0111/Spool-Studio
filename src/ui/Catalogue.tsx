@@ -1,13 +1,11 @@
 import {useEffect,useRef,useState} from 'preact/hooks';
-import {Upload,Plus,FileSpreadsheet,Trash2,ScanText,X,Check,Sparkles,Search,Network,ClipboardPaste,ExternalLink} from 'lucide-preact';
+import {Upload,Plus,FileSpreadsheet,Trash2,ScanText,X,Check,Search,Network,ClipboardPaste,ExternalLink} from 'lucide-preact';
 import {project,setLoads,notify} from './state';
-import {useAi} from './AiPicker';
 import {CATALOGUE_KEYS,emptyEntry,unique,sameText,type CatalogueKey} from '../engine/loads';
 import {clip,MAX_CELL} from '../engine/sheet';
 import {readTables} from '../import/load-list';
 import {readCatalogue,renderPage,closePage} from '../import/document';
-import {askEquipment} from '../import/ai';
-import {readEquipment,mergeCatalogue,parseEquipmentReply,locate,type Proposal} from '../import/equipment';
+import {readEquipment,mergeCatalogue,locate,type Proposal} from '../import/equipment';
 import {catalogueFromDatasheet,catalogueFromWeb,pageText,redirectTarget,MAX_PAGE} from '../import/webpage';
 import {exportCatalogue} from '../export/equipment';
 import type {PageEvidence} from '../store/schema';
@@ -59,7 +57,7 @@ function PageView({file,p,lines,onClose}:{file:File;p:Proposal;lines:readonly Po
 
 // Every value read from a PDF is shown with the line it came from; nothing reaches the catalogue until it is ticked and added.
 function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose:()=>void}) {
- const {ready,picker}=useAi(),[busy,setBusy]=useState(false),[from,setFrom]=useState(0),[view,setView]=useState<number|null>(null),[only,setOnly]=useState(false),stop=useRef<AbortController|null>(null);
+ const [from,setFrom]=useState(0),[view,setView]=useState<number|null>(null),[only,setOnly]=useState(false);
  const rows=read.proposals,picked=rows.filter(p=>p.include);
  // Each row shows the columns its equipment type takes; the others are greyed out and left out when it is added.
  const typeOf=(p:Proposal)=>read.types.find(t=>t.id===p.entry.type);
@@ -78,12 +76,6 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
  const edit=(i:number,k:CatalogueKey,v:string)=>setRead({...read,proposals:rows.map((p,j)=>j===i?{...p,entry:{...p.entry,[k]:clip(v)},unverified:p.unverified.filter(x=>x!==k)}:p)});
  const editExtra=(i:number,key:string,v:string)=>setRead({...read,proposals:rows.map((p,j)=>j===i?{...p,entry:{...p.entry,extra:{...p.entry.extra,[key]:clip(v)}}}:p)});
  const retype=(i:number,id:string)=>setRead({...read,proposals:rows.map((p,j)=>j===i?{...p,entry:{...p.entry,type:id},typeGuess:false}:p)});
- async function ai(){
-  const ctl=new AbortController();stop.current=ctl;setBusy(true);
-  try{const s=await ready();if(typeof s==='string'){notify(s);return;}
-   const found=applyPick(parseEquipmentReply(await askEquipment(s,read.pages,ctl.signal),read.pages,read.file),read.types);setRead({...read,proposals:found});notify(`The local model read ${found.length} entries. Values not found on their page are marked red.`);}
-  catch(e){notify(message(e,'The local model could not read the file.'));}finally{setBusy(false);stop.current=null;}
- }
  function add(){
   const brand=clip(read.brand.trim());if(!brand){notify('Enter the brand for these entries.');return;}
   // The catalogue is looked up by brand, model and configuration: a row without a model can never be picked, and two
@@ -97,8 +89,7 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
  }
  return <div class="modal-backdrop"><section class="modal schematic-modal" role="dialog" aria-modal="true" aria-label="Review datasheet entries">
   <div class="panel-heading"><div><div class="eyebrow">READ DATASHEET</div><h2>{read.file}</h2><p>{read.pages.length} page{read.pages.length===1?'':'s'} read{read.ocr?`, ${read.ocr} by OCR (check numbers carefully)`:''}. Tick the rows to add and fix anything misread. Red values were not found on the page they came from, or a row's kW, In, efficiency and power factor do not work out to its voltage.{read.pdf?' Click a page number to see where each value was printed.':''}</p></div><button class="icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></div>
-  <div class="import-source"><label class="field"><span>Brand</span><input value={read.brand} maxLength={MAX_CELL} placeholder="Manufacturer name" onInput={e=>setRead({...read,brand:e.currentTarget.value})}/></label>
-   <div class="ai-read">{picker}<button class="button secondary small" disabled={busy} onClick={()=>void ai()}><Sparkles size={14}/>{busy?'Reading…':'Read with local AI'}</button>{busy&&<button class="button ghost small" onClick={()=>stop.current?.abort()}>Cancel</button>}</div></div>
+  <div class="import-source"><label class="field"><span>Brand</span><input value={read.brand} maxLength={MAX_CELL} placeholder="Manufacturer name" onInput={e=>setRead({...read,brand:e.currentTarget.value})}/></label></div>
   <div class="schematic-table"><table><thead><tr><th><input type="checkbox" checked={all} aria-label="Add all rows" onChange={()=>setRead({...read,proposals:rows.map(x=>({...x,include:!all}))})}/></th><th>{HEADS.model}</th>{read.types.length>0&&<th>Equipment type</th>}
     {cols.map(k=><th key={k}>{HEADS[k]}</th>)}{extras.map(x=><th key={x.key}>{x.label}{x.unit?` (${x.unit})`:''}</th>)}<th>Page</th><th>Read from</th></tr></thead>
    <tbody>{list.slice(from,last).map(({p,i})=>{const t=typeOf(p);return <tr key={i} class={p.include?'':'off'}><td><input type="checkbox" checked={p.include} aria-label={`Add row ${i+1}`} onChange={e=>{const on=e.currentTarget.checked;setRead({...read,proposals:rows.map((x,j)=>j===i?{...x,include:on}:x)});}}/></td>
@@ -110,7 +101,7 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
     {extras.map(x=>{const off=!hasExtra(p,x.key),need=!off&&missing(p,'',x.key);return <td key={x.key} class={`cell ${need?'bad':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not have this parameter.`:need?'Required for this equipment type. Type it from the datasheet.':undefined}>
      <input value={off?'':p.entry.extra?.[x.key]??''} disabled={off} aria-label={`${x.label}, row ${i+1}`} maxLength={MAX_CELL} onInput={e=>editExtra(i,x.key,e.currentTarget.value)}/></td>;})}
     <td>{p.page&&read.pdf?<button class="text-button" title="Show where these values are on the page" onClick={()=>setView(i)}>p. {p.page}</button>:p.page||'—'}</td><td class="evidence" title={p.note?`${p.note} ${p.evidence}`:p.evidence}>{p.note?`⚠ ${p.note} `:''}{p.evidence}</td></tr>;})}</tbody></table>
-   {!rows.length&&<p class="sheet-empty">No labelled values found (rated power in kW, current in A, voltage, efficiency or power factor next to a model or article number). Try Read with local AI, or add a row and type the values from the PDF.</p>}</div>
+   {!rows.length&&<p class="sheet-empty">No labelled values found (rated power in kW, current in A, voltage, efficiency or power factor next to a model or article number). Add a row and type the values from the PDF.</p>}</div>
   <div class="modal-actions"><span class="muted">{picked.length} to add{unchecked?` · ${unchecked} values to check`:''}{guesses?` · ${guesses} types to check`:''}</span>
    <label class="check-inline muted"><input type="checkbox" checked={only} onChange={e=>{setOnly(e.currentTarget.checked);setFrom(0);}}/>Only rows to check</label>
    {list.length>PAGE&&<span class="pager"><button class="button ghost small" disabled={!from} onClick={()=>setFrom(Math.max(0,from-PAGE))}>Previous</button><span class="muted">Rows {from+1}–{last} of {list.length}</span><button class="button ghost small" disabled={last>=list.length} onClick={()=>setFrom(from+PAGE)}>Next</button></span>}
@@ -200,6 +191,6 @@ export function Catalogue() {
     <td class="row-tools"><button class="icon-button danger" aria-label={`Delete entry ${i+1}`} title="Delete entry" onClick={()=>setLoads({catalogue:cat.filter((_,j)=>j!==i)})}><Trash2 size={13}/></button></td></tr>;})}</tbody>
   </table>{!shown.length&&<p class="sheet-empty">No entries match.</p>}</div>
   :<section class="panel list-empty"><ScanText size={26}/><h2>No catalogue yet</h2><p>Import a catalogue workbook (sheets named "Brand (Name)" or any sheet with a Model / Part Number column), read a manufacturer's PDF datasheet, or add entries by hand.</p>
-   <p>PDFs are read on this computer: the text layer first, OCR for scanned pages, and optionally a local AI model. For a vendor's web page, use Paste web page: copy the page in your browser and paste it. You check every value before it is added.</p></section>}
+   <p>PDFs are read on this computer: the text layer first, and OCR for scanned pages. For a vendor's web page, use Paste web page: copy the page in your browser and paste it. You check every value before it is added.</p></section>}
  </>;
 }

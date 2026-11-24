@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'preact/hooks';
 import type {ComponentChildren} from 'preact';
-import {Upload,Plus,FileSpreadsheet,Sparkles,X,Check,Table2,Printer,Search,AlertTriangle,Trash2,Network,MessageSquare,ChevronDown,MoreHorizontal,Columns3,BookOpen,ClipboardList} from 'lucide-preact';
+import {Upload,Plus,FileSpreadsheet,Sparkles,X,Check,Table2,Printer,Search,AlertTriangle,Trash2,Network,ChevronDown,MoreHorizontal,Columns3,BookOpen,ClipboardList} from 'lucide-preact';
 import {project,listSheet,cableGroups,setListCell,setListRows,setList,setDefaults,acceptAll,exportExcel,exporting,notify,updateProject,tab,listPanel,listFilter,listSearch,selection,inspecting,type ListFilter} from './state';
 import {Sheet,Legend,pasteGrid,focusCell,GROUPS} from './Sheet';
 import {Calculation} from './Calculation';
@@ -12,7 +12,6 @@ import {suggestionCount} from '../engine/suggest';
 import {readSchematic,isSchematic,SCHEMATIC_ACCEPT,type SchematicRead} from '../import/schematic-read';
 import {SchematicReview} from './Schematic';
 import {readPanels} from '../import/panels';
-import {Assistant} from './Assistant';
 
 const unique=(v:string[])=>[...new Set(v)];
 const head=(col:InputCol)=>COLUMNS.find(c=>c.col===col)?.header.split('\n')[0]??col;
@@ -84,7 +83,7 @@ function Drawer({index}:{index:number}) {
   <Calculation row={row} result={res} index={index} rows={s.effective} results={s.results} onPickSize={size=>{setListCell(index,'AC',size);notify(`Row ${index+1}: cable size set to ${size} mm².`);}}/></aside>;
 }
 export function LoadList() {
- const list=project.value.list,s=listSheet.value,ref=useRef<HTMLInputElement>(null),drawing=useRef<HTMLInputElement>(null),stop=useRef<AbortController|null>(null),anchor=useRef<number|null>(null),[draft,setDraft]=useState<Draft|null>(null),[schematic,setSchematic]=useState<(SchematicRead&{columns?:string[]})|null>(null),[book,setBook]=useState(false),[busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[showIssues,setShowIssues]=useState(false),[showQty,setShowQty]=useState(false),[asking,setAsking]=useState(false),[view,setView]=useState('All columns');
+ const list=project.value.list,s=listSheet.value,ref=useRef<HTMLInputElement>(null),drawing=useRef<HTMLInputElement>(null),stop=useRef<AbortController|null>(null),anchor=useRef<number|null>(null),[draft,setDraft]=useState<Draft|null>(null),[schematic,setSchematic]=useState<(SchematicRead&{columns?:string[]})|null>(null),[book,setBook]=useState(false),[busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[showIssues,setShowIssues]=useState(false),[showQty,setShowQty]=useState(false),[view,setView]=useState('All columns');
  const [sizingColumns,setSizingColumns]=useState<Col[]>(COLUMNS.map(c=>c.col));
  // Schematics (PDF, DXF, images) go through the drawing reader and a review step; tables go through column mapping.
  async function openDrawing(file:File){if(stop.current)return;const ctl=new AbortController();stop.current=ctl;setBusy(true);setProgress('Reading the drawing…');try{const read=await readSchematic(file,p=>setProgress(p.message),ctl.signal);setBook(false);setSchematic(read);}catch(e){notify(e instanceof Error?e.message:'Could not read the drawing.');}finally{stop.current=null;setBusy(false);setProgress('');if(drawing.current)drawing.current.value='';}}
@@ -118,7 +117,7 @@ export function LoadList() {
   <div class="page-head"><div><h1>Cable sizing</h1><p>{list.source||'Load list'} · {filled} circuits{panels.length>1?` on ${panels.length} panels`:''}</p></div>
    <div class="page-actions"><Menu label={<><Upload size={15}/>Import<ChevronDown size={14}/></>}><button disabled={busy} onClick={()=>ref.current?.click()}><Upload size={15}/>Import load list…</button><button disabled={busy} onClick={()=>drawing.current?.click()}><Network size={15}/>From schematic…</button></Menu>
     <button class="button secondary small" onClick={()=>{listFilter.value='all';listSearch.value='';setListRows([...list.rows,{...emptyRow(),C:p??''}]);}}><Plus size={15}/>Add row</button>
-    <Menu title="More actions" end label={<MoreHorizontal size={17}/>}><button disabled={!filled} onClick={()=>printReport('list')}><Printer size={15}/>Print / PDF</button><button disabled={!filled} onClick={()=>setAsking(!asking)}><MessageSquare size={15}/>{asking?'Close Ask AI':'Ask AI'}</button></Menu>
+    <Menu title="More actions" end label={<MoreHorizontal size={17}/>}><button disabled={!filled} onClick={()=>printReport('list')}><Printer size={15}/>Print / PDF</button></Menu>
     <button class="button primary small" disabled={exporting.value||!filled} onClick={()=>void exportExcel(s.effective,'cable sizing')}><FileSpreadsheet size={15}/>Export to Excel</button></div></div>
   <p class="list-summary" aria-label="Summary"><span><b>{filled}</b> circuits</span><em class="ok">{pass} pass</em><em class="bad">{fail} fail</em><em class="warn">{filled-pass-fail} incomplete</em><i/>
    <span title={`${finals.length} final circuits · ${fmt(kva,1)} kVA`}><b>{fmt(kw,1)}</b> kW</span><i/>
@@ -126,7 +125,6 @@ export function LoadList() {
    <button class="text-button" aria-expanded={showQty} title={`${groups.length} cable products`} onClick={()=>setShowQty(!showQty)}><b>{km.toFixed(2)}</b> km cable</button><i/>
    <span><b>{pending}</b> suggestions</span>{pending>0&&<button class="text-button" onClick={acceptAll}>Accept all</button>}</p>
   {showQty&&<section class="panel qty-panel"><table><thead><tr><th>Cable</th><th>Circuits</th><th>Runs</th><th>Total m</th><th/></tr></thead><tbody>{groups.map(g=><tr key={g.key}><td>{g.label}{g.perSet>1&&<small> · {g.perSet} cores per set</small>}</td><td>{g.items}{g.uncheckedItems>0&&<small class="warn"> ({g.uncheckedItems} not passing)</small>}</td><td>{g.runsM.length}</td><td>{fmt(g.runsM.reduce((a,b)=>a+b,0))}</td><td><button class="text-button" onClick={()=>{updateProject({runsFrom:g.key});tab.value='drums';}}>Plan drums →</button></td></tr>)}</tbody></table>{!groups.length&&<p class="muted">Sized circuits with a cable run appear here.</p>}</section>}
-  {asking&&<Assistant onClose={()=>setAsking(false)}/>}
   <div class="toolbar filter-bar">{panels.length>1&&<label class="panel-pick"><span class="visually-hidden">Panel</span><select value={p===null?'all':String(panels.indexOf(p))} onChange={e=>{const v=e.currentTarget.value;listPanel.value=v==='all'?null:panels[+v]??null;}}><option value="all">All panels ({panels.length})</option>{panels.map((name,k)=><option key={name} value={k}>{name||'No panel'} ({list.rows.filter((r,i)=>!isBlankRow(r)&&panelOf(i)===name).length})</option>)}</select></label>}
    <div class="segmented" role="tablist" aria-label="Filter rows">{(['all','issues','fail','incomplete','suggested','pass'] as const).map(k=><button key={k} role="tab" aria-selected={f===k} class={f===k?'active':''} onClick={()=>listFilter.value=k}>{k==='all'?'All':k==='issues'?'Flagged':k[0]!.toUpperCase()+k.slice(1)}<b class={k==='fail'||k==='issues'?'bad':k==='pass'?'ok':k==='incomplete'?'warn':''}>{counts[k]}</b></button>)}</div>
    <label class="search"><Search size={14}/><input value={listSearch.value} placeholder="Find From / To / item" aria-label="Find rows" onInput={e=>listSearch.value=e.currentTarget.value}/></label>

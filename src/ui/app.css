@@ -122,13 +122,6 @@ kbd{background:var(--sunken);border-color:var(--line-strong);color:var(--text)}.
 .schematic-empty{margin:0 23px 12px;padding:12px 14px;border:1px solid var(--warn-line);background:var(--warn-soft);color:var(--text);border-radius:8px;font-size:12.5px;line-height:1.55}.schematic-empty b{color:var(--warn)}
 .schematic-text{margin:0 23px 14px;font-size:12px;color:var(--text-2)}.schematic-text summary{cursor:pointer;padding:4px 0}.schematic-text pre{max-height:26vh;overflow:auto;margin:6px 0 0;padding:10px 12px;background:var(--sunken);border:1px solid var(--line);border-radius:8px;font-family:PlexMono,ui-monospace,monospace;font-size:11px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:break-word}
 @media(max-width:700px){.schematic-empty,.schematic-text{margin-inline:12px}}
-/* Load-list assistant: a local model explains the sheet and proposes changes the engineer ticks. */
-.assistant{margin-bottom:10px;padding:12px 14px;display:grid;gap:8px}.assistant-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.assistant-head b{display:inline-flex;align-items:center;gap:7px}
-.assistant>p{margin:0;font-size:12px}.assistant-turns{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:320px;overflow:auto}
-.assistant-turns li{white-space:pre-wrap;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--line);font-size:13px}.assistant-turns li.user{background:var(--sunken);color:var(--muted)}.assistant-turns li.assistant{background:var(--surface);color:var(--text)}
-.assistant-fixes{display:grid;gap:6px;padding:8px 10px;border:1px dashed var(--info-line);border-radius:var(--radius);background:var(--info-soft)}.assistant-fixes ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
-.assistant-fixes label{display:flex;gap:8px;align-items:baseline;font-size:13px}.assistant-fixes i{color:var(--info)}.assistant-fixes small{color:var(--muted)}
-.assistant-ask{display:flex;gap:8px}.assistant-ask input{flex:1;min-width:0}
 
 /* One tab per panel above the row filters; scrolls sideways when a load list has many panels. */
 .panel-tabs{display:flex;max-width:100%;overflow-x:auto;margin-bottom:8px}
@@ -201,7 +194,6 @@ kbd{background:var(--sunken);border-color:var(--line-strong);color:var(--text)}.
 .load-totals td.actions{display:flex;gap:6px;justify-content:flex-end}
 .load-overall{display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px;padding:12px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--text-2)}.load-overall b{color:var(--text);font:600 13px PlexMono}
 .load-overall label{display:inline-flex;align-items:center;gap:8px}.load-overall input{width:70px;height:28px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);color:var(--text);padding:0 8px;text-align:right}.load-overall label.bad input{border-color:var(--bad)}.load-overall small{color:var(--text-3)}
-.ai-read{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}.ai-read select{height:32px;border:1px solid var(--line-strong);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px;padding:0 8px}
 .schematic-table tr.off td{opacity:.5}
 button.link{border:0;background:none;padding:0;color:var(--accent);font:inherit;text-decoration:underline;text-underline-offset:2px}
 .viz-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}@media(max-width:900px){.viz-row{grid-template-columns:1fr}}

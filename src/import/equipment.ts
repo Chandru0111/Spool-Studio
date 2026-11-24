@@ -204,22 +204,9 @@ export function verify(e:CatalogueRow,text:string):CatalogueKey[] {
  for(const k of ['un','config'] as const){const lead=e[k].split(',')[0]!.trim().toLowerCase(),v=e[k].match(/\d{2,5}/)?.[0];if(v&&!has(v)&&!(lead&&t.toLowerCase().includes(lead)))bad.push(k);}
  return bad;
 }
-// Where a row's values are printed when its reader kept no positions (single datasheets, the local model): every text
+// Where a row's values are printed when its reader kept no positions (single datasheets): every text
 // item that holds one of them, matched as verify matches them, so a value printed twice is boxed twice.
 export function locate(e:CatalogueRow,lines:readonly PositionedLine[]):Box[] {
  const keys=(['model','ratedKw','protA','inA','efficiency','pf','un','config'] as const).filter(k=>k==='un'||k==='config'?/\d{2,5}/.test(e[k]):e[k].trim());
  return lines.flatMap(l=>l.cells.flatMap(c=>{const miss=verify(e,c.text);return keys.filter(k=>!miss.includes(k)).map(k=>({key:k,x0:c.x,x1:c.x+(c.w??0),y:c.y??l.y??0,h:c.h||8}));}));
-}
-// The local model's reply (see askEquipment): rows of strings, each checked against the page it names.
-export function parseEquipmentReply(content:string,pages:readonly PageEvidence[],file:string):Proposal[] {
- let body:unknown;try{body=JSON.parse(content.slice(content.indexOf('{'),content.lastIndexOf('}')+1));}catch{body=null;}
- const rows=(body as {rows?:unknown}|null)?.rows;if(!Array.isArray(rows))throw Error('The local model did not reply with a list of entries. Try again, or use the rows read without AI.');
- const s=(v:unknown)=>typeof v==='string'||typeof v==='number'?clip(String(v).trim()):'';
- return rows.slice(0,500).flatMap(r=>{
-  if(!r||typeof r!=='object')return [];const o=r as Record<string,unknown>,e=emptyEntry();
-  e.model=s(o.model);e.config=s(o.configuration);e.ratedKw=dot(s(o.ratedKw));e.protA=dot(s(o.protectionA));e.inA=dot(s(o.inA));e.un=s(o.un);e.efficiency=asFraction(s(o.efficiency));e.pf=asFraction(s(o.pf));
-  if(!e.model&&!e.ratedKw&&!e.inA)return [];const pg=pages.find(p=>p.page===Number(o.page));
-  e.source=clip(`${file}${pg?`, page ${pg.page}`:''} (local AI)`);
-  return [{entry:e,page:pg?.page??0,evidence:s(o.evidence).slice(0,300),unverified:verify(e,pg?.text??pages.map(p=>p.text).join('\n')),include:true}];
- });
 }

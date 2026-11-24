@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "2844c5ec0b7561ee5d3b022718473701359407c0fcbf147a305d16f425929d35",
+  "sourceFingerprint": "25cc857ab0ce8dce64512e2f139ee2a9a7037504b3f0977d4491f92f6816e074",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -445,7 +445,6 @@
       "src/export/equipment-layout.ts",
       "src/export/equipment.ts",
       "src/export/template.ts",
-      "src/import/ai.ts",
       "src/import/document.ts",
       "src/import/drawing-ocr.ts",
       "src/import/drum-catalogue.ts",
@@ -464,9 +463,7 @@
       "src/main.tsx",
       "src/store/project.ts",
       "src/store/schema.ts",
-      "src/ui/AiPicker.tsx",
       "src/ui/App.tsx",
-      "src/ui/Assistant.tsx",
       "src/ui/Calculation.tsx",
       "src/ui/Catalogue.tsx",
       "src/ui/DrumSources.tsx",
@@ -511,38 +508,6 @@
   },
   "tests": {
     "cases": [
-      {
-        "file": "tests/ai.test.ts",
-        "name": "keeps only values found in a quote that is really in the drawing"
-      },
-      {
-        "file": "tests/ai.test.ts",
-        "name": "rejects replies that are not a circuit list"
-      },
-      {
-        "file": "tests/ai.test.ts",
-        "name": "only talks to a model on this computer"
-      },
-      {
-        "file": "tests/ai.test.ts",
-        "name": "sends the prompt only after the local-only check and refuses redirects on the POST"
-      },
-      {
-        "file": "tests/ai.test.ts",
-        "name": "requires confirmation of on-device LM Studio routing before sending a prompt"
-      },
-      {
-        "file": "tests/ai.test.ts",
-        "name": "briefs the model with the panel tree, every row and its issues, all from the engine"
-      },
-      {
-        "file": "tests/ai.test.ts",
-        "name": "keeps only fixes for real rows and input columns, cleaned like an import, never a cable run"
-      },
-      {
-        "file": "tests/ai.test.ts",
-        "name": "asks only a model on this computer"
-      },
       {
         "file": "tests/bend-reference.test.ts",
         "name": "uses the supplied table boundaries without turning installation guidance into a drum limit"
@@ -877,7 +842,7 @@
       },
       {
         "file": "tests/loads.test.ts",
-        "name": "flags values from the local model that are not on the page"
+        "name": "flags values that are not on the page"
       },
       {
         "file": "tests/loads.test.ts",
@@ -1127,8 +1092,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-24T09:21:21.010Z",
-    "sourceFingerprint": "2844c5ec0b7561ee5d3b022718473701359407c0fcbf147a305d16f425929d35",
+    "checkedAt": "2026-11-24T09:35:05.989Z",
+    "sourceFingerprint": "25cc857ab0ce8dce64512e2f139ee2a9a7037504b3f0977d4491f92f6816e074",
     "status": "passed",
     "steps": [
       {
@@ -1139,7 +1104,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  14 passed (14); Tests  154 passed (154)"
+        "summary": "Test Files  13 passed (13); Tests  144 passed (144)"
       },
       {
         "command": "npm run build",
@@ -1171,15 +1136,15 @@
     },
     {
       "path": "AGENTS.md",
-      "bytes": 25123,
-      "sha256": "32af4768dcbb0e8d4a73ee0b7fcf5d946aa71db20bae7f4c66cb51c683de3d1f",
+      "bytes": 23888,
+      "sha256": "4c2a41dc1185a497693308a636d6043759063e4a317ca1c719efe88f311ee311",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "README.md",
-      "bytes": 11520,
-      "sha256": "a8eece4c103882b16c00e49a18098c5470dac840f8d384ea35431a8997225294",
+      "bytes": 11082,
+      "sha256": "acb23384e49398a4d4cdb7c3fca1f60caf95b0b4fb5c59e374a82846cec581c3",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1199,15 +1164,15 @@
     },
     {
       "path": "docs/security-review.md",
-      "bytes": 5989,
-      "sha256": "02525f2b8c95093d371d545f6417ff06f72817c84bf4f765824319f1c5a458d8",
+      "bytes": 5105,
+      "sha256": "93827726e716de7bb9855ad3ebae010031136ae37f0a239a075434a0878ec04a",
       "role": "Project documentation.",
       "runtime": false
     },
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "69f53c8fe49af1a1b225255abb1af61ff137526c81cc9460c5996e988fc86b41",
+      "sha256": "32c48635c9951fd6d62c3b236c2291cef48eec6d1ff1074e53b0f578046ab557",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1227,8 +1192,8 @@
     },
     {
       "path": "public/_headers",
-      "bytes": 923,
-      "sha256": "7e26d5a9c26cb4567e7d95fb1d4699390c3030edae3307c435bc03cba8bed781",
+      "bytes": 833,
+      "sha256": "93229ca09d313f3ff2fada49d826a46392d686cf36b303285bd9f52883d26bd5",
       "role": "Local static asset.",
       "runtime": false
     },
@@ -1241,8 +1206,8 @@
     },
     {
       "path": "public/index.html",
-      "bytes": 914,
-      "sha256": "8b42653e33816afab4d629b17a64fb1ce2ceec7fd55a5b76d10e479795e3948d",
+      "bytes": 824,
+      "sha256": "933070761022162fa7665f1cff4771e99becfa746990b7259877e3aae4d601a1",
       "role": "Local static asset.",
       "runtime": false
     },
@@ -1638,37 +1603,6 @@
       "runtime": true
     },
     {
-      "path": "src/import/ai.ts",
-      "bytes": 12281,
-      "sha256": "19104ff8a3ece9ae7962a0967c759a54804e7dd37800c6e10159ebd32ff916d3",
-      "role": "Project configuration.",
-      "exports": [
-        "AI_DEFAULT",
-        "AI_MAX_CHARS",
-        "AiSettings",
-        "ChatTurn",
-        "Fix",
-        "advicePrompt",
-        "aiCandidates",
-        "aiModels",
-        "aiPrompt",
-        "askAdvice",
-        "askAi",
-        "askEquipment",
-        "equipmentPrompt",
-        "isLocalUrl",
-        "listBrief",
-        "parseAdvice"
-      ],
-      "imports": [
-        "../engine/issues",
-        "../engine/sheet",
-        "./load-list",
-        "./schematic"
-      ],
-      "runtime": true
-    },
-    {
       "path": "src/import/document.ts",
       "bytes": 10456,
       "sha256": "fc3d0314a6c350ef72923df13233bec1cc8a797ee9cc51bff0e86b27b15bafa4",
@@ -1731,8 +1665,8 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 18852,
-      "sha256": "7e5362a347706659f2615c7cf9fb727b2c50342f712e9935c36d11b82128452a",
+      "bytes": 17571,
+      "sha256": "90f8516cb53a10ab638d39687e474905dc989dbac5a69b0e6f303ceaeb9f3a3b",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "exports": [
         "Box",
@@ -1747,7 +1681,6 @@
         "mergeCatalogue",
         "mergePanels",
         "mergeSizing",
-        "parseEquipmentReply",
         "readEquipment",
         "toSizing",
         "verify"
@@ -2059,20 +1992,6 @@
       "runtime": true
     },
     {
-      "path": "src/ui/AiPicker.tsx",
-      "bytes": 2027,
-      "sha256": "170d72ec677e69529c813f177ed6e2357688ab9d49441e6cc274d6e1b3709fa2",
-      "role": "Project configuration.",
-      "exports": [
-        "useAi"
-      ],
-      "imports": [
-        "../import/ai",
-        "preact/hooks"
-      ],
-      "runtime": true
-    },
-    {
       "path": "src/ui/App.tsx",
       "bytes": 7719,
       "sha256": "35830c48800117e089705da5b459b9d52a8438efd8672b977fec8c5b5264b285",
@@ -2087,25 +2006,6 @@
         "./Loads",
         "./Report",
         "./SingleCable",
-        "./state",
-        "lucide-preact",
-        "preact/hooks"
-      ],
-      "runtime": true
-    },
-    {
-      "path": "src/ui/Assistant.tsx",
-      "bytes": 4321,
-      "sha256": "514d224ac38da5d0524a3ad2de7b7bf69281fcb77f88842c111e0a80d0cf6063",
-      "role": "Project configuration.",
-      "exports": [
-        "Assistant"
-      ],
-      "imports": [
-        "../engine/issues",
-        "../engine/sheet",
-        "../import/ai",
-        "./AiPicker",
         "./state",
         "lucide-preact",
         "preact/hooks"
@@ -2129,8 +2029,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 26531,
-      "sha256": "1a10ba27a0fc770845e66839fdeb3afc27498c578aef8d008cba7825bf30af94",
+      "bytes": 25451,
+      "sha256": "dbd6aaa6adf1febe02900c373f1ae071f1d19818cf6a5db855f5ecf44d1252f3",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
@@ -2140,14 +2040,12 @@
         "../engine/loads",
         "../engine/sheet",
         "../export/equipment",
-        "../import/ai",
         "../import/document",
         "../import/equipment",
         "../import/load-list",
         "../import/parse",
         "../import/webpage",
         "../store/schema",
-        "./AiPicker",
         "./TypePicker",
         "./state",
         "@preact/signals",
@@ -2217,8 +2115,8 @@
     },
     {
       "path": "src/ui/LoadList.tsx",
-      "bytes": 26316,
-      "sha256": "10a62a5d80ff2fd0fdd2ebdb3fa0816c49da16a320fdbab7582e31af305b2ac8",
+      "bytes": 26045,
+      "sha256": "1debeed2625a09bb425ba3c113990d7251058c4287b52b8f175f2d47efab713f",
       "role": "Import mapping dialog; header with Import menu (load list or schematic), Add row, a More menu (Print / PDF, Ask AI) and Export to Excel as the only primary action; one-line summary (status split, connected load on final circuits only, worst total VD opening its calculation, cable km toggling quantities with drum links, pending suggestions with Accept all); one filter bar (panel dropdown, status chips, search, issues list with jump-to-cell, Defaults popover for suggestion settings, View menu with screen-only column presets plus the colour key); bulk edit of selected rows, grid, calculation drawer and 'How the sheet works' notes. Appending enforces the 2,000-row project limit. Drop routing by file type, reading progress bar with Cancel, and the schematic review dialog.",
       "exports": [
         "LoadList",
@@ -2231,7 +2129,6 @@
         "../import/load-list",
         "../import/panels",
         "../import/schematic-read",
-        "./Assistant",
         "./Calculation",
         "./Report",
         "./Schematic",
@@ -2308,17 +2205,15 @@
     },
     {
       "path": "src/ui/Schematic.tsx",
-      "bytes": 6835,
-      "sha256": "5f3b82bc162f1785c380769311437210718ad91eeeae2f80709b50278439cae6",
+      "bytes": 5594,
+      "sha256": "503950479e3429cb52e45d4b74780696316b466802a6f9418c2d6650e594c1f2",
       "role": "Review dialog for circuits read from a schematic: tick/untick rows, page and source text per row, worked-out values in italics with their reason, notes (spares skipped, unsupported voltages, DC, unticked fed-from feeders), Create load list / Add to current list. Opens even when no circuits are recognised, explaining why and showing the text that was read; a collapsible \"Text read from the drawing\" panel is always available.",
       "exports": [
         "SchematicReview"
       ],
       "imports": [
         "../engine/sheet",
-        "../import/ai",
         "../import/schematic-read",
-        "./AiPicker",
         "./state",
         "lucide-preact",
         "preact/hooks"
@@ -2386,8 +2281,8 @@
     },
     {
       "path": "src/ui/app.css",
-      "bytes": 104559,
-      "sha256": "eac2b677d0fdc3c15ef0928d5945b5c6926a68747b203a94ec1332a13dd03a03",
+      "bytes": 103124,
+      "sha256": "8cff92ae8be1bf9ebf4d50187e55b2bf142123cd8af8c499b01b2515486e1343",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -2475,31 +2370,6 @@
         "zod"
       ],
       "runtime": true
-    },
-    {
-      "path": "tests/ai.test.ts",
-      "bytes": 6209,
-      "sha256": "b3d8aab6c852c27e72305f516c3cc3f5998a7108c478e762ea68e94e4d08e972",
-      "role": "Regression test or fixture.",
-      "exports": [],
-      "imports": [
-        "../src/engine/issues",
-        "../src/engine/suggest",
-        "../src/import/ai",
-        "../src/import/panels",
-        "vitest"
-      ],
-      "tests": [
-        "keeps only values found in a quote that is really in the drawing",
-        "rejects replies that are not a circuit list",
-        "only talks to a model on this computer",
-        "sends the prompt only after the local-only check and refuses redirects on the POST",
-        "requires confirmation of on-device LM Studio routing before sending a prompt",
-        "briefs the model with the panel tree, every row and its issues, all from the engine",
-        "keeps only fixes for real rows and input columns, cleaned like an import, never a cable run",
-        "asks only a model on this computer"
-      ],
-      "runtime": false
     },
     {
       "path": "tests/bend-reference.test.ts",
@@ -2681,8 +2551,8 @@
     },
     {
       "path": "tests/loads.test.ts",
-      "bytes": 36875,
-      "sha256": "acd1a11d1cf4950efb0c92d4c4fd5eb4d7c7e85a77fb123eaa02af9f725b8d5e",
+      "bytes": 36448,
+      "sha256": "71ad754a8d70c8e08b609466b5eddea00ed25dda8eeaf79726751f5f38ca3695",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2735,7 +2605,7 @@
         "reads a scanned table from OCR word boxes",
         "finds where values are printed when a reader kept no positions",
         "finds labelled values and checks them against the page",
-        "flags values from the local model that are not on the page",
+        "flags values that are not on the page",
         "reads the character list from a model settings file",
         "decodes CTC output: repeats merge, a blank separates a repeated letter",
         "finds text regions in the probability map and grows them by the unclip margin",
@@ -2915,8 +2785,8 @@
     },
     {
       "path": "vercel.json",
-      "bytes": 1384,
-      "sha256": "f96fb0c77dac21a4a15e0cb2c2f0299dfc643629d70b8dcd2f1b9dbb3704ed6a",
+      "bytes": 1294,
+      "sha256": "954830360a85f5361340c9ddc29d540a5240f7f0692359d7ede604be0f61dcec",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -3172,30 +3042,6 @@
       "from": "src/export/template.ts",
       "to": "jszip",
       "relation": "external"
-    },
-    {
-      "from": "src/import/ai.ts",
-      "to": "src/engine/issues.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/import/ai.ts",
-      "to": "src/engine/sheet.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/import/ai.ts",
-      "to": "src/import/load-list.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/import/ai.ts",
-      "to": "src/import/schematic.ts",
-      "relation": "imports",
-      "resolved": true
     },
     {
       "from": "src/import/document.ts",
@@ -3529,17 +3375,6 @@
       "relation": "external"
     },
     {
-      "from": "src/ui/AiPicker.tsx",
-      "to": "src/import/ai.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/AiPicker.tsx",
-      "to": "preact/hooks",
-      "relation": "external"
-    },
-    {
       "from": "src/ui/App.tsx",
       "to": "src/store/project.ts",
       "relation": "imports",
@@ -3592,46 +3427,6 @@
       "relation": "external"
     },
     {
-      "from": "src/ui/Assistant.tsx",
-      "to": "src/engine/issues.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Assistant.tsx",
-      "to": "src/engine/sheet.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Assistant.tsx",
-      "to": "src/import/ai.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Assistant.tsx",
-      "to": "src/ui/AiPicker.tsx",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Assistant.tsx",
-      "to": "src/ui/state.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Assistant.tsx",
-      "to": "lucide-preact",
-      "relation": "external"
-    },
-    {
-      "from": "src/ui/Assistant.tsx",
-      "to": "preact/hooks",
-      "relation": "external"
-    },
-    {
       "from": "src/ui/Calculation.tsx",
       "to": "src/engine/explain.ts",
       "relation": "imports",
@@ -3674,12 +3469,6 @@
     },
     {
       "from": "src/ui/Catalogue.tsx",
-      "to": "src/import/ai.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Catalogue.tsx",
       "to": "src/import/document.ts",
       "relation": "imports",
       "resolved": true
@@ -3711,12 +3500,6 @@
     {
       "from": "src/ui/Catalogue.tsx",
       "to": "src/store/schema.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Catalogue.tsx",
-      "to": "src/ui/AiPicker.tsx",
       "relation": "imports",
       "resolved": true
     },
@@ -3917,12 +3700,6 @@
     },
     {
       "from": "src/ui/LoadList.tsx",
-      "to": "src/ui/Assistant.tsx",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/LoadList.tsx",
       "to": "src/ui/Calculation.tsx",
       "relation": "imports",
       "resolved": true
@@ -4117,19 +3894,7 @@
     },
     {
       "from": "src/ui/Schematic.tsx",
-      "to": "src/import/ai.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Schematic.tsx",
       "to": "src/import/schematic-read.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "src/ui/Schematic.tsx",
-      "to": "src/ui/AiPicker.tsx",
       "relation": "imports",
       "resolved": true
     },
@@ -4306,35 +4071,6 @@
     {
       "from": "src/ui/state.ts",
       "to": "zod",
-      "relation": "external"
-    },
-    {
-      "from": "tests/ai.test.ts",
-      "to": "src/engine/issues.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "tests/ai.test.ts",
-      "to": "src/engine/suggest.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "tests/ai.test.ts",
-      "to": "src/import/ai.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "tests/ai.test.ts",
-      "to": "src/import/panels.ts",
-      "relation": "imports",
-      "resolved": true
-    },
-    {
-      "from": "tests/ai.test.ts",
-      "to": "vitest",
       "relation": "external"
     },
     {
@@ -4864,40 +4600,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-24T09:21:21.081Z",
+  "updatedAt": "2026-11-24T09:35:06.053Z",
   "history": [
-    {
-      "at": "2026-11-24T06:58:44.085Z",
-      "added": [],
-      "modified": [
-        "src/import/parse.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T06:58:44.785Z",
-      "added": [],
-      "modified": [
-        "src/import/parse.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T06:59:39.910Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T06:59:52.691Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-24T09:03:37.304Z",
       "added": [
@@ -4967,6 +4671,52 @@
     },
     {
       "at": "2026-11-24T09:21:21.081Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:34:17.911Z",
+      "added": [],
+      "modified": [
+        "public/_headers",
+        "public/index.html",
+        "src/import/equipment.ts",
+        "src/ui/Catalogue.tsx",
+        "src/ui/LoadList.tsx",
+        "src/ui/Schematic.tsx",
+        "src/ui/app.css",
+        "vercel.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:34:24.819Z",
+      "added": [],
+      "modified": [
+        "tests/loads.test.ts"
+      ],
+      "removed": [
+        "src/import/ai.ts",
+        "src/ui/AiPicker.tsx",
+        "src/ui/Assistant.tsx",
+        "tests/ai.test.ts"
+      ]
+    },
+    {
+      "at": "2026-11-24T09:34:50.975Z",
+      "added": [],
+      "modified": [
+        "AGENTS.md",
+        "README.md",
+        "docs/security-review.md"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:35:06.053Z",
       "added": [],
       "modified": [
         "docs/verification.json"
