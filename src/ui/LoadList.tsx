@@ -6,7 +6,7 @@ import {Sheet,Legend,pasteGrid,focusCell,GROUPS} from './Sheet';
 import {Calculation} from './Calculation';
 import {printReport} from './Report';
 import {findIssues} from '../engine/issues';
-import {readTables,bestHeader,detectColumns,toSheetRows,cleanValue,type InputTable,type Mapping} from '../import/load-list';
+import {readTables,bestHeader,detectColumns,itemRows,mappingAt,toSheetRows,cleanValue,type InputTable,type Mapping} from '../import/load-list';
 import {COLUMNS,INPUT_COLS,failsCheck,MAX_CELL,emptyRow,isBlankRow,listOptions,TABLES,type Col,type InputCol,type ListCol,type RowResult,type SheetRow} from '../engine/sheet';
 import {suggestionCount} from '../engine/suggest';
 import {readSchematic,isSchematic,SCHEMATIC_ACCEPT,type SchematicRead} from '../import/schematic-read';
@@ -16,17 +16,17 @@ import {readPanels} from '../import/panels';
 const unique=(v:string[])=>[...new Set(v)];
 const head=(col:InputCol)=>COLUMNS.find(c=>c.col===col)?.header.split('\n')[0]??col;
 type Draft={file:string;tables:InputTable[];sheet:number;header:number;mapping:Mapping};
-const draftFor=(file:string,tables:InputTable[],sheet:number):Draft=>{const rows=tables[sheet]?.rows??[],header=bestHeader(rows);return {file,tables,sheet,header,mapping:detectColumns(rows[header]??[])};};
+const draftFor=(file:string,tables:InputTable[],sheet:number):Draft=>{const t=tables[sheet],header=bestHeader(t?.rows??[]);return {file,tables,sheet,header,mapping:t?mappingAt(t,header):{}};};
 
 function ImportDialog({draft,setDraft,onClose}:{draft:Draft;setDraft:(d:Draft)=>void;onClose:()=>void}) {
  const table=draft.tables[draft.sheet],headers=(table?.rows[draft.header]??[]).map((h,i)=>h.trim()||`Column ${i+1}`);
- let rows:ReturnType<typeof toSheetRows>=[],error='';try{rows=table?toSheetRows(table.rows,draft.header,draft.mapping):[];}catch(e){error=e instanceof Error?e.message:'Could not read rows.';}
+ let rows:ReturnType<typeof toSheetRows>=[],error='';try{rows=table?toSheetRows(itemRows(table),draft.header,draft.mapping):[];}catch(e){error=e instanceof Error?e.message:'Could not read rows.';}
  const existing=project.value.list.rows.filter(r=>!isBlankRow(r)).length,found=INPUT_COLS.filter(c=>draft.mapping[c]!==undefined);
  const finish=(append:boolean)=>{if(append&&existing+rows.length>2000){notify('A load list supports at most 2,000 rows.');return;}setList({rows:append?[...project.value.list.rows.filter(r=>!isBlankRow(r)),...rows]:rows,source:draft.file});notify(`Imported ${rows.length} rows from ${draft.file}. Blank cells now show suggestions.`);onClose();};
  return <div class="modal-backdrop"><section class="modal import-modal" role="dialog" aria-modal="true" aria-label="Import load list">
   <div class="panel-heading"><div><div class="eyebrow">IMPORT LOAD LIST</div><h2>{draft.file}</h2><p>{found.length} of the sheet's input columns found. Check the matches, then import.</p></div><button class="icon-button" aria-label="Close import" onClick={onClose}><X size={18}/></button></div>
   <div class="import-source">{draft.tables.length>1&&<label class="field"><span>Worksheet</span><select value={draft.sheet} onChange={e=>setDraft(draftFor(draft.file,draft.tables,+e.currentTarget.value))}>{draft.tables.map((t,i)=><option key={t.name} value={i}>{t.name}</option>)}</select></label>}
-   <label class="field"><span>Header row</span><select value={draft.header} onChange={e=>{const header=+e.currentTarget.value;setDraft({...draft,header,mapping:detectColumns(table?.rows[header]??[])});}}>{(table?.rows??[]).slice(0,25).map((r,i)=><option key={i} value={i}>Row {i+1}: {r.filter(Boolean).slice(0,4).join(' · ').slice(0,60)||'(empty)'}</option>)}</select></label></div>
+   <label class="field"><span>Header row</span><select value={draft.header} onChange={e=>{const header=+e.currentTarget.value;setDraft({...draft,header,mapping:table?mappingAt(table,header):{}});}}>{(table?.rows??[]).slice(0,25).map((r,i)=><option key={i} value={i}>Row {i+1}: {r.filter(Boolean).slice(0,4).join(' · ').slice(0,60)||'(empty)'}</option>)}</select></label></div>
   <div class="mapping-list">{INPUT_COLS.map(col=><label key={col} class={draft.mapping[col]!==undefined?'found':''}><span><b>{col}</b>{head(col)}</span><select value={draft.mapping[col]??''} onChange={e=>{const v=e.currentTarget.value,mapping={...draft.mapping};if(v==='')delete mapping[col];else mapping[col]=+v;setDraft({...draft,mapping});}}><option value="">Not in file</option>{headers.map((h,i)=><option key={i} value={i}>{h}</option>)}</select></label>)}</div>
   {error&&<p class="import-error">{error}</p>}{!!table?.formulaCells&&<p class="import-cache-note">This worksheet contains {table.formulaCells} formula cells. Import uses their saved values, not recalculated formulas. Recalculate and save the source in Excel first; review mapped values before importing.</p>}
   <div class="modal-actions"><span class="muted">{rows.length} rows to import. Anything not in the file is left blank for you or the suggestions to fill.</span><button class="button secondary small" onClick={onClose}>Cancel</button>{existing>0&&<button class="button secondary small" disabled={!rows.length} onClick={()=>finish(true)}>Add to current list</button>}<button class="button primary small" disabled={!rows.length} onClick={()=>finish(false)}><Check size={15}/>{existing?'Replace list':`Import ${rows.length} rows`}</button></div>

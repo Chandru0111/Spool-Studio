@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "25cc857ab0ce8dce64512e2f139ee2a9a7037504b3f0977d4491f92f6816e074",
+  "sourceFingerprint": "ff0ad145c46631077091fa8b5b23de71b86a3bf75aa04f7f265082e1309cd170",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -865,6 +865,18 @@
         "name": "shares a line's words out over its parts by length"
       },
       {
+        "file": "tests/merged-cells.test.ts",
+        "name": "reads an equipment list with merged titles, headings, shared cells and a two-line item"
+      },
+      {
+        "file": "tests/merged-cells.test.ts",
+        "name": "reads a panel load list with a merged title, section heading, two-column heading and a shared voltage"
+      },
+      {
+        "file": "tests/merged-cells.test.ts",
+        "name": "leaves a sheet without merges as it is"
+      },
+      {
         "file": "tests/panels.test.ts",
         "name": "reads stacked panel blocks on one sheet and gives each load its panel as From"
       },
@@ -1092,8 +1104,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-24T09:35:05.989Z",
-    "sourceFingerprint": "25cc857ab0ce8dce64512e2f139ee2a9a7037504b3f0977d4491f92f6816e074",
+    "checkedAt": "2026-11-24T10:09:13.519Z",
+    "sourceFingerprint": "ff0ad145c46631077091fa8b5b23de71b86a3bf75aa04f7f265082e1309cd170",
     "status": "passed",
     "steps": [
       {
@@ -1104,7 +1116,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  13 passed (13); Tests  144 passed (144)"
+        "summary": "Test Files  14 passed (14); Tests  147 passed (147)"
       },
       {
         "command": "npm run build",
@@ -1129,8 +1141,8 @@
     },
     {
       "path": ".vercelignore",
-      "bytes": 505,
-      "sha256": "39824b630295242c325f9e825fe84705e6aade23958cee6cf9dca1a90c896508",
+      "bytes": 628,
+      "sha256": "08f29eefccbdb90f795b3a7cce8cd69c7f45aef165fbdb660e32feb1281b7452",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1172,14 +1184,14 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "32c48635c9951fd6d62c3b236c2291cef48eec6d1ff1074e53b0f578046ab557",
+      "sha256": "1dc8c8599f0867fa693f989d0bb4fe6b09ecd589a6769812ce3c88079b4ebca3",
       "role": "Project documentation.",
       "runtime": false
     },
     {
       "path": "package-lock.json",
-      "bytes": 164083,
-      "sha256": "6714d15af5f4ccd9ec47b45d825a5b21362f24b93cc0a4e816d6f721edf27579",
+      "bytes": 165759,
+      "sha256": "261c6138188cf72b0e3bf76a31b8b0da3699905312fab8a703493a8fc73f5720",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1665,8 +1677,8 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 17571,
-      "sha256": "90f8516cb53a10ab638d39687e474905dc989dbac5a69b0e6f303ceaeb9f3a3b",
+      "bytes": 17629,
+      "sha256": "0f4c63c2dd40ba884a52edb66c92242d1b4efac966d9ec48970bdac36c72bb25",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "exports": [
         "Box",
@@ -1714,20 +1726,24 @@
     },
     {
       "path": "src/import/load-list.ts",
-      "bytes": 11449,
-      "sha256": "fde24224ab2b8a0719419193a97e0b76ffd165f983ebb324a60400160cb1b484",
+      "bytes": 14248,
+      "sha256": "8673757b3371cc6b390b97d4ad2577002e5703f6bebe6bcfa5e05649b94be5e4",
       "role": "ExcelJS read-only workbook import, CSV/TSV parser, header aliases, explicit unit cleanup, mapping and drum-template parsing. Ambiguous numbers remain invalid instead of being partially parsed.",
       "exports": [
         "DRUM_TEMPLATE",
         "InputTable",
         "Mapping",
+        "Merge",
         "bestHeader",
         "cleanValue",
         "detectColumns",
+        "itemRows",
+        "mappingAt",
         "normalize",
         "parseDrumOptions",
         "readTables",
-        "toSheetRows"
+        "toSheetRows",
+        "valueColumns"
       ],
       "imports": [
         "../engine/sheet",
@@ -1761,8 +1777,8 @@
     },
     {
       "path": "src/import/panels.ts",
-      "bytes": 10104,
-      "sha256": "715311af6aa61501c68014a86c67654551e6e91c27708c6b7042b48c3c5a9678",
+      "bytes": 10132,
+      "sha256": "08f58fa131056f744406f578b2c45808f255c2ecf5832d8def231e9b5e7a89f7",
       "role": "Project configuration.",
       "exports": [
         "PanelRead",
@@ -2115,8 +2131,8 @@
     },
     {
       "path": "src/ui/LoadList.tsx",
-      "bytes": 26045,
-      "sha256": "1debeed2625a09bb425ba3c113990d7251058c4287b52b8f175f2d47efab713f",
+      "bytes": 26050,
+      "sha256": "2be0805bd9ebee119ea1637c606dc147ff0fe6b5b90557224ec127a93c3bdbd8",
       "role": "Import mapping dialog; header with Import menu (load list or schematic), Add row, a More menu (Print / PDF, Ask AI) and Export to Excel as the only primary action; one-line summary (status split, connected load on final circuits only, worst total VD opening its calculation, cable km toggling quantities with drum links, pending suggestions with Accept all); one filter bar (panel dropdown, status chips, search, issues list with jump-to-cell, Defaults popover for suggestion settings, View menu with screen-only column presets plus the colour key); bulk edit of selected rows, grid, calculation drawer and 'How the sheet works' notes. Appending enforces the 2,000-row project limit. Drop routing by file type, reading progress bar with Cancel, and the schematic review dialog.",
       "exports": [
         "LoadList",
@@ -2611,6 +2627,26 @@
         "finds text regions in the probability map and grows them by the unclip margin",
         "cuts a detected line into its printed parts, ignoring grid lines",
         "shares a line's words out over its parts by length"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/merged-cells.test.ts",
+      "bytes": 3756,
+      "sha256": "153ae66cd2cf8eb6232968313ae73eb6c7818d3183b73ffdf861310fbed4161d",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/import/equipment",
+        "../src/import/load-list",
+        "../src/import/panels",
+        "exceljs",
+        "vitest"
+      ],
+      "tests": [
+        "reads an equipment list with merged titles, headings, shared cells and a two-line item",
+        "reads a panel load list with a merged title, section heading, two-column heading and a shared voltage",
+        "leaves a sheet without merges as it is"
       ],
       "runtime": false
     },
@@ -4398,6 +4434,34 @@
       "relation": "external"
     },
     {
+      "from": "tests/merged-cells.test.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/merged-cells.test.ts",
+      "to": "src/import/load-list.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/merged-cells.test.ts",
+      "to": "src/import/panels.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/merged-cells.test.ts",
+      "to": "exceljs",
+      "relation": "external"
+    },
+    {
+      "from": "tests/merged-cells.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/panels.test.ts",
       "to": "src/engine/suggest.ts",
       "relation": "imports",
@@ -4600,98 +4664,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-24T09:35:06.053Z",
+  "updatedAt": "2026-11-24T10:09:13.584Z",
   "history": [
-    {
-      "at": "2026-11-24T09:03:37.304Z",
-      "added": [
-        "tests/rating-table-params.test.ts"
-      ],
-      "modified": [
-        "src/engine/equipment-types.ts",
-        "src/import/document.ts",
-        "src/import/equipment.ts",
-        "src/import/parse.ts",
-        "src/import/rating-table.ts",
-        "src/import/webpage.ts",
-        "src/ui/Catalogue.tsx",
-        "src/ui/TypePicker.tsx"
-      ],
-      "removed": [
-        "tests/cross-check.test.ts"
-      ]
-    },
-    {
-      "at": "2026-11-24T09:03:43.551Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:04:10.019Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:17:52.306Z",
-      "added": [],
-      "modified": [
-        "src/engine/loads.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:20:51.317Z",
-      "added": [],
-      "modified": [
-        "src/ui/Scenario.tsx"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:20:56.776Z",
-      "added": [],
-      "modified": [
-        "src/ui/app.css"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:21:09.085Z",
-      "added": [],
-      "modified": [
-        "tests/loads.test.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:21:21.081Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:34:17.911Z",
-      "added": [],
-      "modified": [
-        "public/_headers",
-        "public/index.html",
-        "src/import/equipment.ts",
-        "src/ui/Catalogue.tsx",
-        "src/ui/LoadList.tsx",
-        "src/ui/Schematic.tsx",
-        "src/ui/app.css",
-        "vercel.json"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-24T09:34:24.819Z",
       "added": [],
@@ -4717,6 +4691,87 @@
     },
     {
       "at": "2026-11-24T09:35:06.053Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:43:00.271Z",
+      "added": [],
+      "modified": [
+        ".vercelignore"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:44:52.030Z",
+      "added": [],
+      "modified": [
+        "package-lock.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T10:07:53.577Z",
+      "added": [],
+      "modified": [
+        "src/import/equipment.ts",
+        "src/import/load-list.ts",
+        "src/import/panels.ts",
+        "src/ui/LoadList.tsx"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T10:08:12.612Z",
+      "added": [
+        "tests/merged-cells.test.ts"
+      ],
+      "modified": [],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T10:08:34.844Z",
+      "added": [],
+      "modified": [
+        "src/import/load-list.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T10:08:49.063Z",
+      "added": [],
+      "modified": [
+        "src/import/equipment.ts",
+        "src/import/load-list.ts",
+        "src/import/panels.ts",
+        "src/ui/LoadList.tsx"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T10:08:49.590Z",
+      "added": [],
+      "modified": [
+        "src/import/equipment.ts",
+        "src/import/load-list.ts",
+        "src/import/panels.ts",
+        "src/ui/LoadList.tsx"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T10:09:00.705Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T10:09:13.584Z",
       "added": [],
       "modified": [
         "docs/verification.json"

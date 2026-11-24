@@ -5,7 +5,9 @@ import {COLUMNS,INPUT_COLS,clip,emptyRow,isBlankRow,listOptions,type InputCol,ty
 import {parseDelimited} from './parse';
 
 export const normalize=(value:string)=>value.toLowerCase().replace(/²/g,'2').replace(/[^a-z0-9]/g,'');
-export type InputTable={name:string;rows:string[][];formulaCells:number};
+// A merged range, 0-based and inclusive. Excel keeps the value in the top-left cell only; rows repeat it in every cell it covers.
+export type Merge={top:number;left:number;bottom:number;right:number};
+export type InputTable={name:string;rows:string[][];formulaCells:number;merges?:Merge[]};
 export async function readTables(file:File):Promise<InputTable[]> {
  if(!file.size||file.size>25*1024*1024)throw Error('Choose a non-empty file up to 25 MB.');
  const ext=file.name.split('.').pop()?.toLowerCase();
@@ -18,13 +20,14 @@ export async function readTables(file:File):Promise<InputTable[]> {
   const rowCount=sheet.rowCount,columnCount=sheet.columnCount;
   if(rowCount>10000||columnCount>200)throw Error(`${sheet.name} exceeds 10,000 rows or 200 columns.`);
   let formulaCells=0;
-  const rows:string[][]=[];
+  const rows:string[][]=[],merges=new Map<string,Merge>();
   for(let rowIndex=1;rowIndex<=rowCount;rowIndex++) {
    const row=sheet.getRow(rowIndex),values:string[]=[];
    for(let col=1;col<=columnCount;col++) {
-    const v=row.getCell(col).value;
+    const cell=row.getCell(col),v=cell.value,m=cell.master.fullAddress,copy=m.row!==rowIndex||m.col!==col;
+    if(copy){const s=merges.get(m.address);if(s){s.bottom=Math.max(s.bottom,rowIndex-1);s.right=Math.max(s.right,col-1);}else merges.set(m.address,{top:m.row-1,left:m.col-1,bottom:rowIndex-1,right:col-1});}
     // Load lists often calculate kW or current with formulas, so the saved result is what the engineer sees.
-    if(v&&typeof v==='object'&&('formula' in v||'sharedFormula' in v)){formulaCells++;const r=v.result;values.push(typeof r==='number'||typeof r==='string'?String(r):'');}
+    if(v&&typeof v==='object'&&('formula' in v||'sharedFormula' in v)){if(!copy)formulaCells++;const r=v.result;values.push(typeof r==='number'||typeof r==='string'?String(r):'');}
     else if(v&&typeof v==='object'&&'richText' in v)values.push(v.richText.map(t=>t.text).join(''));
     else if(v&&typeof v==='object'&&'hyperlink' in v)values.push(typeof v.text==='string'?v.text:'');
     else if(typeof v==='boolean')values.push(v?'TRUE':'FALSE');
@@ -32,8 +35,35 @@ export async function readTables(file:File):Promise<InputTable[]> {
    }
    rows.push(values);
   }
-  return {name:sheet.name,rows,formulaCells};
+  return merges.size?{name:sheet.name,rows,formulaCells,merges:[...merges.values()]}:{name:sheet.name,rows,formulaCells};
  });
+}
+// The rows of a table as Excel shows them, for reading items under its heading (headings are read from the rows as they are,
+// where a merged heading names every column it covers). A value merged across columns belongs to its first column only;
+// merged down rows it stands for each row (a brand or duty shared by several items). A row with no value of its own is the
+// second line of the item above, and a row holding only a title merged across three or more columns is a section heading:
+// both come back blank.
+export function itemRows(t:InputTable):string[][] {
+ const merges=t.merges??[];if(!merges.length)return t.rows;
+ const rows=t.rows.map(r=>[...r]),own=t.rows.map(r=>r.map(v=>!!v.trim()));
+ for(const m of merges)for(let r=m.top;r<=m.bottom;r++){const row=rows[r],mine=own[r];if(!row||!mine)continue;
+  for(let c=m.left;c<=m.right;c++){if(r===m.top&&c===m.left)continue;mine[c]=false;if(c>m.left)row[c]='';}}
+ return rows.map((r,i)=>{
+  const filled=r.flatMap((v,c)=>v.trim()?[c]:[]);
+  const heading=filled.length===1&&merges.some(m=>m.top<=i&&i<=m.bottom&&m.left===filled[0]&&m.right-m.left>=2);
+  return !own[i]!.some(Boolean)||heading?r.map(()=>''):r;
+ });
+}
+// A heading merged across columns stands for one field: it is read from whichever covered column holds the values.
+export function valueColumns<K extends string>(map:Partial<Record<K,number>>,t:InputTable,header:number,body:readonly string[][]=itemRows(t)):Partial<Record<K,number>> {
+ const out={...map},used=new Set(Object.values(map).filter((c):c is number=>typeof c==='number'));
+ const filled=(c:number)=>{let n=0;for(let r=header+1;r<body.length;r++)if(body[r]?.[c]?.trim())n++;return n;};
+ for(const k of Object.keys(out) as K[]){
+  const c=out[k]!,m=t.merges?.find(m=>m.top<=header&&header<=m.bottom&&m.left<=c&&c<=m.right&&m.right>m.left);if(!m)continue;
+  let best=c,most=filled(c);for(let j=m.left;j<=m.right;j++)if(j!==c&&!used.has(j)){const n=filled(j);if(n>most){best=j;most=n;}}
+  used.delete(c);used.add(best);out[k]=best;
+ }
+ return out;
 }
 export const DRUM_TEMPLATE='Code,Manufacturer,Flange mm,Barrel mm,Width mm,Payload kg,Tare kg,Lift limit kg,Clearance mm,Fill factor,Capacity m,Rated cable OD mm,Source\n';
 export function parseDrumOptions(table:InputTable):DrumOption[] {
@@ -71,6 +101,7 @@ export function detectColumns(headers:readonly string[]):Mapping {
  for(const col of INPUT_COLS){const want=headerKeys(col);for(const k of want){const i=keys.findIndex((h,j)=>h&&h===k&&!used.has(j));if(i>=0){mapping[col]=i;used.add(i);break;}}}
  return mapping;
 }
+export const mappingAt=(t:InputTable,header:number,body?:readonly string[][]):Mapping=>valueColumns(detectColumns(t.rows[header]??[]),t,header,body);
 export function bestHeader(rows:readonly string[][]):number {let best=0,score=0;for(let i=0;i<Math.min(25,rows.length);i++){const n=Object.keys(detectColumns(rows[i]??[])).length;if(n>score){score=n;best=i;}}return best;}
 // Starter words seen in load lists, by the sheet's list entry. "-", N/A or None mean no starter (not a motor).
 const STARTER_WORDS:[RegExp,string][]=[[/^(dol|directonline|direct)$/,'DOL'],[/^(stardelta|sd|yd|ydelta|wyedelta|y[δ∆])$/,'Star-delta'],[/^(softstarter|softstart|soft|ss)$/,'Soft starter'],[/^(vfd|vsd|vsdvfd|vfdvsd|inverter|drive|variablefrequencydrive|variablespeeddrive|frequencyconverter)$/,'VFD']];

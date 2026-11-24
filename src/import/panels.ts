@@ -1,5 +1,5 @@
 import {emptyRow,clip,calculateSheet,COLUMNS,type InputCol} from '../engine/sheet';
-import {detectColumns,toSheetRows,normalize,type InputTable,type Mapping} from './load-list';
+import {detectColumns,itemRows,mappingAt,toSheetRows,normalize,type InputTable,type Mapping} from './load-list';
 import {readFacts,isBoardTag,type Candidate,type SchematicResult} from './schematic';
 
 // One workbook often holds several load lists, one per MCC/DB panel: a worksheet each, or blocks stacked down one sheet,
@@ -48,17 +48,17 @@ export function readPanels(tables:readonly InputTable[]):PanelRead {
  const nominal=new Map<Candidate,number>(),headOf=new Map<Candidate,{row:string[];mapping:Mapping;inCol:number}>();
  tables.forEach((t,s)=>{
   const heads=t.rows.map((r,i)=>isHeader(r)?i:-1).filter(i=>i>=0);if(!heads.length)return;sheets++;
-  const sheetPanel=sheetPanelOf(t.name);let last:{name:string;why:string}|null=null;
+  const sheetPanel=sheetPanelOf(t.name),body=itemRows(t);let last:{name:string;why:string}|null=null;
   const titles=heads.map((h,k)=>titleAbove(t.rows,h,k?heads[k-1]!+1:0));
   heads.forEach((h,k)=>{
-   const title=titles[k],nextHead=heads[k+1],end=nextHead===undefined?t.rows.length:titles[k+1]?.at??nextHead,mapping=detectColumns(t.rows[h]!);
+   const title=titles[k],nextHead=heads[k+1],end=nextHead===undefined?t.rows.length:titles[k+1]?.at??nextHead,mapping=mappingAt(t,h,body);
    const inCol=t.rows[h]!.findIndex((v,j)=>j!==mapping.N&&IN_HEAD.includes(normalize(v))),head={row:t.rows[h]!,mapping,inCol};
    // A repeated header with no title of its own (a page break) stays on the panel above it.
    const panel=title?{name:title.name,why:`Panel title "${title.text}" (${t.name} row ${title.at+1})`}:k&&last?last:sheetPanel?{name:sheetPanel.name,why:`Worksheet "${t.name}"`}:null;
    last=panel;if(panel&&!boards.includes(panel.name))boards.push(panel.name);
    if(title?.fedFrom&&!fed.has(title.name.toLowerCase()))fed.set(title.name.toLowerCase(),{from:title.fedFrom,text:title.text,sheet:s});
    for(let i=h+1;i<end;i++){
-    const values=t.rows[i]!;if(values.some(v=>TOTAL.test(v.trim()))){totals++;continue;}
+    const values=body[i]!;if(values.some(v=>TOTAL.test(v.trim()))){totals++;continue;}
     const row=toSheetRows([t.rows[h]!,values],0,mapping)[0];if(!row)continue;
     // Loads on a panel are named; an unnamed row is a sub-heading, a summary line or a catalogue entry (a brand price list).
     if(!row.D.trim()){unnamed++;continue;}

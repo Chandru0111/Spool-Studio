@@ -3,7 +3,7 @@ import {DUTIES,FROM_CATALOGUE,LOAD_KEYS,TICK,TICK_KEYS,emptyEntry,emptyLoad,fill
  DEFAULT_FACTORS,DEFAULT_MARGIN,type CatalogueIndex,type CatalogueKey,type CatalogueRow,type Duty,type Factors,type LoadKey} from '../engine/loads';
 import type {LoadPanel,PageEvidence} from '../store/schema';
 import type {EquipmentType} from '../engine/equipment-types';
-import {cleanValue,normalize,type InputTable} from './load-list';
+import {cleanValue,itemRows,normalize,valueColumns,type InputTable} from './load-list';
 import type {PositionedLine} from './parse';
 
 // Header words for each equipment-list and catalogue column, tried in this order; each column takes the first unused match.
@@ -49,12 +49,12 @@ export function readEquipment(tables:readonly InputTable[],file:string):Equipmen
  const panels:LoadPanel[]=[],catalogue:CatalogueRow[]=[],notes:string[]=[];
  for(const t of tables){
   const h=bestHeader(t.rows);if(h<0)continue;
-  const cols=columnsAt(t.rows,h,true),cell=(r:readonly string[],k:HeadKey)=>{const i=cols[k];return i===undefined?'':clip((r[i]??'').trim());};
+  const body=itemRows(t),cols=valueColumns(columnsAt(t.rows,h,true),t,h,body),cell=(r:readonly string[],k:HeadKey)=>{const i=cols[k];return i===undefined?'':clip((r[i]??'').trim());};
   // Headings merged over two rows, or repeated for printing, come back as rows that repeat the heading: not items.
   const heading=(r:readonly string[],k:HeadKey)=>normalize(cell(r,k))===normalize(cell(t.rows[h]!,k));
   const brandSheet=/^brand\s*\((.+)\)\s*$/i.exec(t.name)?.[1]?.trim();
   if(brandSheet!==undefined||cols.model!==undefined&&(cols.description===undefined||/catalog/i.test(t.name))){
-   t.rows.slice(h+1).forEach((r,j)=>{const model=cell(r,'model');if(!model||heading(r,'model'))return;const e=emptyEntry(),remarks=cell(r,'remarks');
+   body.slice(h+1).forEach((r,j)=>{const model=cell(r,'model');if(!model||heading(r,'model'))return;const e=emptyEntry(),remarks=cell(r,'remarks');
     e.brand=clip(brandSheet??cell(r,'brand'));e.model=model;for(const k of ['config',...FROM_CATALOGUE] as const)e[k]=cell(r,k);
     // A model with no brand and nothing to fill is a label on a summary sheet, not a catalogue entry.
     if(!e.brand&&!e.config&&FROM_CATALOGUE.every(k=>!e[k]))return;
@@ -66,7 +66,7 @@ export function readEquipment(tables:readonly InputTable[],file:string):Equipmen
   if(cols.description===undefined||Object.keys(cols).length<4||/distribution\s*boards?/i.test(t.rows[h]![cols.description]??''))continue;
   // Everything from the panel's "Normal Running Plant Load" summary down is totals and notes.
   const end=t.rows.findIndex((r,j)=>j>h&&/normal\s+running/i.test(r.join(' ')));
-  const rows=t.rows.slice(h+1,end<0?undefined:end).flatMap(r=>{const d=cell(r,'description');if(!d||TOTAL.test(d)||heading(r,'description'))return [];const row=emptyLoad();
+  const rows=body.slice(h+1,end<0?undefined:end).flatMap(r=>{const d=cell(r,'description');if(!d||TOTAL.test(d)||heading(r,'description'))return [];const row=emptyLoad();
    for(const k of LOAD_KEYS)row[k]=cell(r,k);for(const k of TICK_KEYS)row[k]=isTick(row[k])?TICK:'';if(/^[cis]$/i.test(row.cis))row.cis=row.cis.toUpperCase();return [row];});
   if(!rows.length)continue;
   if(rows.length>500)throw Error(`${t.name} lists more than 500 items. Split it over two sheets.`);
