@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "524ff296c359e81a29f64fe3db39177f75fe3f8b17a410231a596bcfae1b1df5",
+  "sourceFingerprint": "2844c5ec0b7561ee5d3b022718473701359407c0fcbf147a305d16f425929d35",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -761,6 +761,10 @@
       },
       {
         "file": "tests/loads.test.ts",
+        "name": "runs two catalogue entries at the same consumed load, on a panel or not"
+      },
+      {
+        "file": "tests/loads.test.ts",
         "name": "sums a panel with operating factors and design margin"
       },
       {
@@ -1123,8 +1127,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-24T09:04:09.953Z",
-    "sourceFingerprint": "524ff296c359e81a29f64fe3db39177f75fe3f8b17a410231a596bcfae1b1df5",
+    "checkedAt": "2026-11-24T09:21:21.010Z",
+    "sourceFingerprint": "2844c5ec0b7561ee5d3b022718473701359407c0fcbf147a305d16f425929d35",
     "status": "passed",
     "steps": [
       {
@@ -1135,7 +1139,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  14 passed (14); Tests  153 passed (153)"
+        "summary": "Test Files  14 passed (14); Tests  154 passed (154)"
       },
       {
         "command": "npm run build",
@@ -1203,7 +1207,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "debb9f5f338a599e788960e1ea847c4c08a7c968b50d92506160f2bad0aefb0f",
+      "sha256": "69f53c8fe49af1a1b225255abb1af61ff137526c81cc9460c5996e988fc86b41",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1435,8 +1439,8 @@
     },
     {
       "path": "src/engine/loads.ts",
-      "bytes": 9441,
-      "sha256": "2b7aa66b5fcbda0fd4989a9b1c885fb7f761f3a5133a8e86d578e0fb084de7c0",
+      "bytes": 9887,
+      "sha256": "3035e7c2769d4efcba8d8671beaf492e4bf0747df83911311a4e928775bf4bfd",
       "role": "Equipment-list engine: row and catalogue shapes, catalogue index and fill (Brand + Model + Configuration), per-row kW/kVAr/load factor, panel and plant totals with operating factors and design margin, and the scenario comparison.",
       "exports": [
         "Balance",
@@ -1468,6 +1472,7 @@
         "configsOf",
         "emptyEntry",
         "emptyLoad",
+        "entryAt",
         "factorsOf",
         "fillRow",
         "fraction",
@@ -2285,16 +2290,18 @@
     },
     {
       "path": "src/ui/Scenario.tsx",
-      "bytes": 12974,
-      "sha256": "a354dedb5edb039c82343729706c4aaeaa0acfa8f3a7a5edf8a2da800adb927b",
+      "bytes": 20047,
+      "sha256": "9caf7daf758c207fa7a295e9e6ad5b126ce75955525dd0ef9d64fe96fe740ff0",
       "role": "Search across panels by KKS/description, scenario comparison table and inline-SVG grouped bar charts, plant load by panel.",
       "exports": [
         "Scenario"
       ],
       "imports": [
+        "../engine/equipment-types",
         "../engine/loads",
         "./state",
         "lucide-preact",
+        "preact",
         "preact/hooks"
       ],
       "runtime": true
@@ -2379,8 +2386,8 @@
     },
     {
       "path": "src/ui/app.css",
-      "bytes": 104222,
-      "sha256": "c72c13e4090e2d8bad255942e02bdc418839e98e465a40476691d186e6d29856",
+      "bytes": 104559,
+      "sha256": "eac2b677d0fdc3c15ef0928d5945b5c6926a68747b203a94ec1332a13dd03a03",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -2674,8 +2681,8 @@
     },
     {
       "path": "tests/loads.test.ts",
-      "bytes": 36364,
-      "sha256": "440a50a7e78fb239652afe9eeea98d253517a0e93dfcc73c266e81dfeb14ab49",
+      "bytes": 36875,
+      "sha256": "acd1a11d1cf4950efb0c92d4c4fd5eb4d7c7e85a77fb123eaa02af9f725b8d5e",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2699,6 +2706,7 @@
         "keeps text out of the cells the kW formulas read, so the summary never shows #VALUE!",
         "fills blanks from the catalogue and keeps typed values",
         "works out kW and kVAr like the workbook",
+        "runs two catalogue entries at the same consumed load, on a panel or not",
         "sums a panel with operating factors and design margin",
         "compares a candidate model and its effect on the plant",
         "maps panel to From, description to To and rated input power to Design Load",
@@ -4070,6 +4078,12 @@
     },
     {
       "from": "src/ui/Scenario.tsx",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Scenario.tsx",
       "to": "src/engine/loads.ts",
       "relation": "imports",
       "resolved": true
@@ -4083,6 +4097,11 @@
     {
       "from": "src/ui/Scenario.tsx",
       "to": "lucide-preact",
+      "relation": "external"
+    },
+    {
+      "from": "src/ui/Scenario.tsx",
+      "to": "preact",
       "relation": "external"
     },
     {
@@ -4845,48 +4864,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-24T09:04:10.019Z",
+  "updatedAt": "2026-11-24T09:21:21.081Z",
   "history": [
-    {
-      "at": "2026-11-24T06:56:56.699Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T06:58:09.333Z",
-      "added": [],
-      "modified": [
-        "src/import/parse.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T06:58:09.777Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T06:58:13.339Z",
-      "added": [],
-      "modified": [
-        "src/import/parse.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T06:58:33.491Z",
-      "added": [],
-      "modified": [
-        "tests/cross-check.test.ts"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-24T06:58:44.085Z",
       "added": [],
@@ -4948,6 +4927,46 @@
     },
     {
       "at": "2026-11-24T09:04:10.019Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:17:52.306Z",
+      "added": [],
+      "modified": [
+        "src/engine/loads.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:20:51.317Z",
+      "added": [],
+      "modified": [
+        "src/ui/Scenario.tsx"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:20:56.776Z",
+      "added": [],
+      "modified": [
+        "src/ui/app.css"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:21:09.085Z",
+      "added": [],
+      "modified": [
+        "tests/loads.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-24T09:21:21.081Z",
       "added": [],
       "modified": [
         "docs/verification.json"

@@ -62,6 +62,12 @@ export function balance(r:LoadRow):Balance {
  const duty=(DUTIES as readonly string[]).includes(d)?d as Duty:null,kw=duty&&consumed!==null?consumed/(eff??1):null;
  return {loadFactor:consumed!==null&&rated?consumed/rated:null,kw,kvar:kw!==null&&pf!==null?kw*Math.tan(Math.acos(pf)):null,duty};
 }
+// A catalogue entry running consumedKw continuously, counted as the load list counts an item: for comparing two entries
+// at the same load whether or not they are on a panel.
+export function entryAt(e:CatalogueRow,consumedKw:string):Balance&{kva:number|null} {
+ const b=balance({...emptyLoad(),ratedKw:e.ratedKw,efficiency:e.efficiency,pf:e.pf,consumedKw,cis:'C'});
+ return {...b,kva:b.kw!==null&&b.kvar!==null?Math.hypot(b.kw,b.kvar):null};
+}
 
 const withKva=(p:Pair):Load=>({...p,kva:Math.hypot(p.kw,p.kvar)});
 const add=(a:Pair,b:Pair):Pair=>({kw:a.kw+b.kw,kvar:a.kvar+b.kvar});

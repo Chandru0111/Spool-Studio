@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import ExcelJS from 'exceljs';
-import {balance,emptyEntry,emptyLoad,fillRow,indexCatalogue,panelTotals,plantTotals,scenario,type LoadRow} from '../src/engine/loads';
+import {balance,emptyEntry,emptyLoad,entryAt,fillRow,indexCatalogue,panelTotals,plantTotals,scenario,type LoadRow} from '../src/engine/loads';
 import {readTables} from '../src/import/load-list';
 import {catalogueFromPages,locate,mergeSizing,parseEquipmentReply,readEquipment,toSizing,verify} from '../src/import/equipment';
 import {emptyRow} from '../src/engine/sheet';
@@ -56,6 +56,12 @@ describe('equipment load list',()=>{
   expect(b.kw).toBeCloseTo(50);expect(b.kvar).toBeCloseTo(37.5);expect(b.loadFactor).toBeCloseTo(0.8);
   expect(balance(row({cis:'I',consumedKw:'10'})).kw).toBe(10);expect(balance(row({cis:'I',consumedKw:'10'})).kvar).toBeNull();
   expect(balance(row({consumedKw:'10'})).kw).toBeNull();expect(balance(row({cis:'S',consumedKw:'10',efficiency:'95 %'})).kw).toBeCloseTo(10/0.95);
+ });
+ it('runs two catalogue entries at the same consumed load, on a panel or not',()=>{
+  const a=entryAt(cat[0]!,'40'),d=entryAt(cat[2]!,'40');
+  expect(a.kw).toBeCloseTo(40/0.94);expect(a.kvar).toBeCloseTo(40/0.94*Math.tan(Math.acos(0.85)));expect(a.kva).toBeCloseTo(40/0.94/0.85);expect(a.loadFactor).toBeCloseTo(40/45);
+  expect(d.kw).toBeCloseTo(40/0.91);expect(d.loadFactor).toBeCloseTo(40/15);
+  expect(entryAt({...cat[2]!,pf:''},'40').kva).toBeNull();expect(entryAt(cat[0]!,'').kw).toBeNull();
  });
  it('sums a panel with operating factors and design margin',()=>{
   const rows=[row({cis:'C',consumedKw:'30',pf:'1'}),row({cis:'C',consumedKw:'10',pf:'1'}),row({cis:'I',consumedKw:'20',pf:'1'}),row({cis:'I',consumedKw:'10',pf:'1'}),row({cis:'S',consumedKw:'50',pf:'1'})].map(balance);

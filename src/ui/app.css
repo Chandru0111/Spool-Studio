@@ -249,6 +249,8 @@ button.link{border:0;background:none;padding:0;color:var(--accent);font:inherit;
 .compare-form .field{gap:5px}.compare-form .field>span small{color:var(--text-3);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
 .compare-form input{height:32px;width:100%;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);color:var(--text);padding:0 9px;font-size:12.5px}
 .compare-form input.set{border-color:var(--accent);background:var(--accent-soft)}.compare-form input::placeholder{color:var(--text-3)}
+.compare-sides{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:12px}
+.compare-side{margin:0;min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 12px 12px}.compare-side legend{padding:0 4px;font-size:12px;font-weight:600;color:var(--text-2)}.compare-side .form-error{margin:8px 0 0}
 .deltas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .delta{display:flex;flex-direction:column;gap:3px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;background:var(--sunken);min-width:0}
 .delta>span{font-size:11.5px;color:var(--text-2)}.delta b{font-size:19px;font-weight:600}.delta b small{font-size:11px;font-weight:500;color:var(--text-3)}
