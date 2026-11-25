@@ -99,7 +99,7 @@ export function Loads() {
    setLoads({panels:pm.panels,catalogue:cm.catalogue,source:f.name});
    if(read.panels[0])loadPanel.value=pm.panels.findIndex(p=>sameText(p.name,read.panels[0]!.name));
    notify([read.panels.length?`Imported ${read.panels.length} panel${read.panels.length===1?'':'s'} (${count} items${pm.replaced?`; ${pm.replaced} replaced panels of the same name`:''})`:'',
-    read.catalogue.length?`${read.catalogue.length} catalogue entries (${cm.added} new)`:'',...read.notes].filter(Boolean).join('. ')+'. Undo with Ctrl/⌘+Z.');
+    read.catalogue.length?`${read.catalogue.length} catalogue entries (${cm.added} new)`:'',...read.notes].filter(Boolean).map(s=>s.replace(/\.$/,'')).join('. ')+'. Undo with Ctrl/⌘+Z.');
   }catch(e){notify(e instanceof Error?e.message:'Could not read the file.');}
   finally{setBusy(false);if(file.current)file.current.value='';}
  }

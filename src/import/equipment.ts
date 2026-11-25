@@ -7,29 +7,70 @@ import {cleanValue,itemRows,normalize,valueColumns,type InputTable} from './load
 import type {PositionedLine} from './parse';
 
 // Header words for each equipment-list and catalogue column, tried in this order; each column takes the first unused match.
-// Remarks are read only as a catalogue entry's source note.
-type HeadKey=LoadKey|'remarks';
+// Remarks are read only as a catalogue entry's source note. kwC, kwI and kwS: a load listed under the duty it runs at.
+type HeadKey=LoadKey|'remarks'|'kwC'|'kwI'|'kwS';
 const HEADS:[HeadKey,RegExp][]=[
- ['kks',/kks|kss|^tag|tagno/],['description',/description|^(equipment|item|load|loadname|name)$/],['brand',/brand|^make$|manufacturer/],
- ['model',/model|partn(o|umber)|articleno|ordercode/],['config',/config|variant/],['nonEssential',/nonessential/],['essential',/essential/],
- ['vital',/vital/],['restart',/restart/],['starter',/starter/],['cis',/cis$|^ci$|equipmentci$|^duty/],['consumedKw',/consumed/],
- ['ratedKw',/rated(input)?power|inputpower|ratedkw|feederrating/],['protA',/protection|breaker|fuse/],['inA',/^ina?$|nominalcurrent|ratedcurrent|fullloadcurrent|^flc/],
- ['un',/^un$|^un[^a-z]|nominalvoltage|ratedvoltage|^voltage/],['efficiency',/efficien/],['pf',/powerfactor|cosphi|^pf$/],
+ ['kks',/kks|kss|^tag|equipmenttag|tagnumber|equipment(no|number|id)|plantid|asset(no|number|id)/],
+ ['description',/description|^(equipment|item|load|loadname|name|consumers?|consumername|feeder|feedername|circuit|equipmentname)$/],
+ ['brand',/brand|^make$|manufacturer|vendor|supplier/],['model',/model|partn(o|umber)|articleno|ordercode|catalog(ue)?no/],['config',/config|variant/],
+ ['nonEssential',/nonessential/],['essential',/essential/],['vital',/vital/],['restart',/restart/],['starter',/starter/],
+ ['cis',/cis$|^ci$|equipmentci$|^duty|^(mode|operatingmode|operationmode)$/],
+ ['kwC',/^(?!.*kvar).*continuous/],['kwI',/^(?!.*kvar).*intermittent/],['kwS',/^(?!.*kvar).*standby/],
+ ['consumedKw',/consumed|absorbed|operatingload|runningload|actualload|demandload|^load(kw)?$/],
+ ['ratedKw',/rated(input)?power|inputpower|ratedkw|feederrating|ratedoutput|installed(power|load)|connectedload|motorrating|powerrating|^rating(kw)?$/],
+ ['protA',/protection|breaker|fuse|mccb|mcb|^cb|^ocpd/],
+ ['inA',/^ina?$|nominalcurrent|ratedcurrent|fullloadcurrent|^flc|^fla|^current|loadcurrent|runningcurrent/],
+ ['un',/^un$|^un[^a-z]|nominalvoltage|ratedvoltage|^voltage|^volts?$|supplyvoltage|systemvoltage|operatingvoltage|^ue$/],
+ ['efficiency',/efficien|^eff|^eta$/],['pf',/powerfactor|cosphi|^pf$|^pf[^a-z]/],
  ['remarks',/remark|comment|note/],
 ];
+// Starting, locked-rotor and inrush values are not running data, whatever else the heading says.
+const SKIP=/startingcurrent|lockedrotor|inrush/;
+// η and φ carry the meaning of a heading ("η (%)", "cos φ"), so they are spelt out before matching.
+const fold=(s:string)=>normalize(s.replace(/η/g,'eta').replace(/[φϕΦ]/g,'phi'));
 type Columns=Partial<Record<HeadKey,number>>;
-// Workbook headings often stack over a few rows ("CONSUMED" / "LOAD" / "(kW)"); long sentences above them are notes, not headings.
-function columnsAt(rows:readonly string[][],h:number,stacked:boolean):Columns {
- const map:Columns={},width=rows[h]?.length??0;
+// Headings often stack over a few rows ("CONSUMED" / "LOAD" / "(kW)"): each column's heading nearest the values is read first,
+// then its headings together. Long sentences are notes, not headings, and a title repeated across the table (merged) is none.
+function columnsIn(rows:readonly string[][],from:number,to:number,skip?:number):Columns {
+ const map:Columns={},band:string[][]=[];
+ for(let i=Math.max(0,from);i<=to;i++){const r=rows[i]??[];if(heads(r))band.push(r);}
+ const width=Math.max(0,...band.map(r=>r.length));
  for(let c=0;c<width;c++){
-  const own=normalize(rows[h]?.[c]??''),parts:string[]=[];
-  if(stacked)for(let i=Math.max(0,h-4);i<=h;i++){const t=(rows[i]?.[c]??'').trim();if(t&&t.length<=40&&!parts.includes(t))parts.push(t);}
-  const tall=normalize(parts.join(' ')),free=HEADS.filter(([k])=>map[k]===undefined);
+  if(c===skip)continue;
+  const texts=band.map(r=>(r[c]??'').trim()).filter(Boolean),own=fold(texts.at(-1)??''),tall=fold([...new Set(texts.filter(x=>x.length<=40))].join(' '));
+  if(SKIP.test(tall))continue;
+  const free=HEADS.filter(([k])=>map[k]===undefined);
   const hit=(own&&free.find(([,re])=>re.test(own)))||(tall&&free.find(([,re])=>re.test(tall)));if(hit)map[hit[0]]=c;
  }
  return map;
 }
-function bestHeader(rows:readonly string[][]):number {let best=-1,score=0;for(let i=0;i<Math.min(40,rows.length);i++){const n=Object.keys(columnsAt(rows,i,false)).length;if(n>score){score=n;best=i;}}return best;}
+function bestHeader(rows:readonly string[][]):number {let best=-1,score=0;for(let i=0;i<Math.min(40,rows.length);i++){const n=Object.keys(columnsIn(rows,i,i)).length;if(n>score){score=n;best=i;}}return best;}
+// The S/N column numbers the items ("1", "2", "4.1", "A-3"): a row with a number there is an item; headings, totals, notes and
+// spacer rows have none. Its heading row and the first numbered row bound the headings above the list.
+const SERIAL_HEAD=/^(sn|sno|snos|srno|slno|serialno|serialnumber|no|nos|itemno|item|sr|sl)$/;
+const SERIAL=/^\(?[a-z]{0,3}[-.]?\d{1,4}(?:\.\d{1,3})*[.)]?$/i;
+const serialKey=(v:string)=>v.trim().replace(/^\(|[.)]$/g,'');
+// A row of plain column numbers under the headings ("1  2  3  4 …") is no item.
+const numbering=(r:readonly string[])=>{const v=r.map(x=>x.trim()).filter(Boolean);return v.length>=3&&v.every(x=>/^\d+$/.test(x));};
+// A row that can hold headings: not blank, not column numbers, not one title repeated across the table (merged).
+function heads(r:readonly string[]):boolean {const v=r.map(x=>x.trim()).filter(Boolean);return !!v.length&&(v.length<3||new Set(v).size>1)&&!numbering(r);}
+type Serial={col:number;head:number;first:number};
+function serialColumn(rows:readonly string[][],body:readonly string[][]):Serial|null {
+ let best:(Serial&{n:number})|null=null;
+ for(let r=0;r<Math.min(40,rows.length);r++)(rows[r]??[]).forEach((v,c)=>{
+  if(v.trim()!=='#'&&!SERIAL_HEAD.test(fold(v)))return;
+  const first=body.findIndex((x,i)=>i>r&&i<=r+10&&SERIAL.test((x[c]??'').trim())&&!numbering(x));if(first<0)return;
+  // The numbers must mostly count up by one, or the column holds codes ("Item No." as a part number).
+  const nums=body.slice(first).filter(x=>!numbering(x)).map(x=>(x[c]??'').trim()).filter((x,i,a)=>SERIAL.test(x)&&x!==a[i-1]);
+  const tails=nums.map(x=>Number(/(\d+)\D*$/.exec(x)?.[1]));let steps=0;for(let i=1;i<tails.length;i++)if(tails[i]===tails[i-1]!+1)steps++;
+  if(nums.length>1&&steps*2<nums.length-1)return;
+  if(!best||nums.length>best.n)best={col:c,head:r,first,n:nums.length};
+ });
+ return best;
+}
+const KW={C:'kwC',I:'kwI',S:'kwS'} as const;
+// Duty as written: C, I, S or the words.
+const dutyOf=(v:string)=>{const d=v.trim().toLowerCase();return /^c(ont\w*)?$/.test(d)?'C':/^i(nt\w*)?$/.test(d)?'I':/^s(tand\W?by|tby|b)?$/.test(d)?'S':v.trim();};
 const TOTAL=/^(?:sub[\s-]*)?total\b|\bgrand\s+total\b/i;
 // The workbook's room summary block: operating factor per duty and the design margin.
 function readFactors(rows:readonly string[][]):{factors:Factors;margin:string} {
@@ -45,16 +86,19 @@ function readFactors(rows:readonly string[][]):{factors:Factors;margin:string} {
 }
 export type EquipmentRead={panels:LoadPanel[];catalogue:CatalogueRow[];notes:string[]};
 // A workbook of equipment lists, one sheet per panel, and brand catalogues: sheets named "Brand (Name)" or with a Model column but no Description.
+// A sheet with an S/N column is read item by item from its numbered rows; one without falls back to rows that name an item.
 export function readEquipment(tables:readonly InputTable[],file:string):EquipmentRead {
  const panels:LoadPanel[]=[],catalogue:CatalogueRow[]=[],notes:string[]=[];
  for(const t of tables){
-  const h=bestHeader(t.rows);if(h<0)continue;
-  const body=itemRows(t),cols=valueColumns(columnsAt(t.rows,h,true),t,h,body),cell=(r:readonly string[],k:HeadKey)=>{const i=cols[k];return i===undefined?'':clip((r[i]??'').trim());};
+  const body=itemRows(t),sn=serialColumn(t.rows,body);let h=sn?sn.first-1:bestHeader(t.rows);if(h<0)continue;
+  // The headings end at the last heading row above the first item, not at a section title or a row of column numbers.
+  if(sn)while(h>sn.head&&!heads(t.rows[h]??[]))h--;
+  const top=sn?sn.head-3:h-4,cols=valueColumns(columnsIn(t.rows,top,h,sn?.col),t,h,body),cell=(r:readonly string[],k:HeadKey)=>{const i=cols[k];return i===undefined?'':clip((r[i]??'').trim());};
   // Headings merged over two rows, or repeated for printing, come back as rows that repeat the heading: not items.
   const heading=(r:readonly string[],k:HeadKey)=>normalize(cell(r,k))===normalize(cell(t.rows[h]!,k));
   const brandSheet=/^brand\s*\((.+)\)\s*$/i.exec(t.name)?.[1]?.trim();
   if(brandSheet!==undefined||cols.model!==undefined&&(cols.description===undefined||/catalog/i.test(t.name))){
-   body.slice(h+1).forEach((r,j)=>{const model=cell(r,'model');if(!model||heading(r,'model'))return;const e=emptyEntry(),remarks=cell(r,'remarks');
+   body.slice(h+1).forEach((r,j)=>{const model=cell(r,'model');if(!model||heading(r,'model')||numbering(r))return;const e=emptyEntry(),remarks=cell(r,'remarks');
     e.brand=clip(brandSheet??cell(r,'brand'));e.model=model;for(const k of ['config',...FROM_CATALOGUE] as const)e[k]=cell(r,k);
     // A model with no brand and nothing to fill is a label on a summary sheet, not a catalogue entry.
     if(!e.brand&&!e.config&&FROM_CATALOGUE.every(k=>!e[k]))return;
@@ -63,14 +107,33 @@ export function readEquipment(tables:readonly InputTable[],file:string):Equipmen
    continue;
   }
   // The template's panel summary lists boards, not equipment.
-  if(cols.description===undefined||Object.keys(cols).length<4||/distribution\s*boards?/i.test(t.rows[h]![cols.description]??''))continue;
+  if(cols.description===undefined||Object.keys(cols).length<4||t.rows.slice(Math.max(0,top),h+1).some(r=>/distribution\s*boards?/i.test(r[cols.description!]??'')))continue;
   // Everything from the panel's "Normal Running Plant Load" summary down is totals and notes.
-  const end=t.rows.findIndex((r,j)=>j>h&&/normal\s+running/i.test(r.join(' ')));
-  const rows=body.slice(h+1,end<0?undefined:end).flatMap(r=>{const d=cell(r,'description');if(!d||TOTAL.test(d)||heading(r,'description'))return [];const row=emptyLoad();
-   for(const k of LOAD_KEYS)row[k]=cell(r,k);for(const k of TICK_KEYS)row[k]=isTick(row[k])?TICK:'';if(/^[cis]$/i.test(row.cis))row.cis=row.cis.toUpperCase();return [row];});
+  const found=t.rows.findIndex((r,j)=>j>h&&/normal\s+running/i.test(r.join(' '))),end=found<0?body.length:found;
+  let source=body.slice(h+1,end);
+  if(sn){
+   // A number merged down two rows is one item written on two lines: the second line fills what the first left blank.
+   const goesOn=(i:number)=>!!t.merges?.some(m=>m.left<=sn.col&&sn.col<=m.right&&m.top<i&&i<=m.bottom);
+   const picked:{r:string[];key:string}[]=[];
+   for(let i=sn.first;i<end;i++){const r=body[i]!,v=(r[sn.col]??'').trim(),last=picked.at(-1);if(!SERIAL.test(v)||numbering(r))continue;
+    if(last&&goesOn(i)){r.forEach((x,c)=>{if(x.trim()&&!last.r[c]?.trim())last.r[c]=x;});continue;}
+    picked.push({r:[...r],key:serialKey(v)});}
+   // "4" over "4.1" and "4.2" titles a group: the numbered sub-items are the items.
+   source=picked.filter((p,k)=>!picked[k+1]?.key.startsWith(`${p.key}.`)).map(p=>p.r);
+  }
+  const rows=source.flatMap(r=>{const d=cell(r,'description');if(!d&&!(sn&&cell(r,'kks'))||TOTAL.test(d)||d&&heading(r,'description'))return [];const row=emptyLoad();
+   for(const k of LOAD_KEYS)row[k]=cell(r,k);for(const k of TICK_KEYS)row[k]=isTick(row[k])?TICK:'';row.cis=dutyOf(row.cis);
+   // A list that shows duty by the column its load is entered in (Continuous / Intermittent / Standby kW).
+   if(!/^[CIS]$/.test(row.cis)){const at=(['C','I','S'] as const).filter(d=>num(cell(r,KW[d]))!==null);if(at.length===1){const d=at[0]!;row.cis=d;row.consumedKw||=cell(r,KW[d]);}}
+   return [row];});
   if(!rows.length)continue;
   if(rows.length>500)throw Error(`${t.name} lists more than 500 items. Split it over two sheets.`);
-  panels.push({name:t.name.trim().slice(0,60)||`Panel ${panels.length+1}`,rows,...readFactors(t.rows)});
+  const name=t.name.trim().slice(0,60)||`Panel ${panels.length+1}`;
+  // A KKS names one item: the same KKS twice usually means the column read as KKS holds something else (a model).
+  const count=new Map<string,number>();for(const r of rows){const k=r.kks.toLowerCase();if(k)count.set(k,(count.get(k)??0)+1);}
+  const twice=[...count].filter(([,n])=>n>1).map(([k])=>rows.find(r=>r.kks.toLowerCase()===k)!.kks);
+  if(twice.length)notes.push(`${name}: KKS ${twice.slice(0,5).join(', ')}${twice.length>5?'…':''} ${twice.length===1?'is':'are'} on more than one item. Check the KKS column.`);
+  panels.push({name,rows,...readFactors(t.rows)});
  }
  // A search or summary sheet repeats rows from two or more room sheets: skip it rather than count the equipment twice.
  const keyOf=(r:object)=>JSON.stringify(r),homes=panels.map(p=>new Set(p.rows.map(keyOf)));

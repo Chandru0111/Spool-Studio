@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "ff0ad145c46631077091fa8b5b23de71b86a3bf75aa04f7f265082e1309cd170",
+  "sourceFingerprint": "7463652ee05f64f15b09b579bf4457db70337f3e83eba41d57b7fbba523e4e3f",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -1005,6 +1005,10 @@
         "name": "reads PNG, JPEG and WebP dimensions from the header alone"
       },
       {
+        "file": "tests/serial-rows.test.ts",
+        "name": "takes the numbered rows as the items and reads each value from its column"
+      },
+      {
         "file": "tests/sheet.test.ts",
         "name": "matches the values Microsoft Excel calculated for 260 rows of the supplied workbook"
       },
@@ -1104,8 +1108,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-24T10:09:13.519Z",
-    "sourceFingerprint": "ff0ad145c46631077091fa8b5b23de71b86a3bf75aa04f7f265082e1309cd170",
+    "checkedAt": "2026-11-25T02:08:21.956Z",
+    "sourceFingerprint": "7463652ee05f64f15b09b579bf4457db70337f3e83eba41d57b7fbba523e4e3f",
     "status": "passed",
     "steps": [
       {
@@ -1116,7 +1120,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  14 passed (14); Tests  147 passed (147)"
+        "summary": "Test Files  15 passed (15); Tests  148 passed (148)"
       },
       {
         "command": "npm run build",
@@ -1184,7 +1188,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "1dc8c8599f0867fa693f989d0bb4fe6b09ecd589a6769812ce3c88079b4ebca3",
+      "sha256": "ad0fa7da32f2ff13fdade370e05a31c32d86f466c50e08f71d71f10552111ad6",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1677,8 +1681,8 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 17629,
-      "sha256": "0f4c63c2dd40ba884a52edb66c92242d1b4efac966d9ec48970bdac36c72bb25",
+      "bytes": 23041,
+      "sha256": "7549c7a61e50909652afa7c916b9abb921cbdfdd3c37fea44b90fef33d08d173",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "exports": [
         "Box",
@@ -2158,8 +2162,8 @@
     },
     {
       "path": "src/ui/Loads.tsx",
-      "bytes": 17489,
-      "sha256": "fe766c145881a95572b74d9bde6f941f8cc49d0ba2169a767afd10ad05c5832a",
+      "bytes": 17517,
+      "sha256": "7290bc91da48f6eb70b8a95e2974c84300a13346f74c13c03abfb2a778678c58",
       "role": "Load list tab: panel tabs, the equipment grid (ticks, dropdowns, catalogue placeholders, Excel paste), panel totals with editable factors and margin, import, export and Send to cable sizing.",
       "exports": [
         "Loads"
@@ -2746,6 +2750,23 @@
         "keeps MTEXT clean-up linear and survives huge paragraph counts",
         "handles DXF text that tries to break the parser",
         "reads PNG, JPEG and WebP dimensions from the header alone"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/serial-rows.test.ts",
+      "bytes": 2606,
+      "sha256": "d357145862b7cb7bc9f91a3ffe89884067729c50cdff73a775da1463d38b0719",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/import/equipment",
+        "../src/import/load-list",
+        "exceljs",
+        "vitest"
+      ],
+      "tests": [
+        "takes the numbered rows as the items and reads each value from its column"
       ],
       "runtime": false
     },
@@ -4568,6 +4589,28 @@
       "relation": "external"
     },
     {
+      "from": "tests/serial-rows.test.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/serial-rows.test.ts",
+      "to": "src/import/load-list.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/serial-rows.test.ts",
+      "to": "exceljs",
+      "relation": "external"
+    },
+    {
+      "from": "tests/serial-rows.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/sheet.test.ts",
       "to": "src/engine/sheet.ts",
       "relation": "imports",
@@ -4664,47 +4707,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-24T10:09:13.584Z",
+  "updatedAt": "2026-11-25T02:08:22.023Z",
   "history": [
-    {
-      "at": "2026-11-24T09:34:24.819Z",
-      "added": [],
-      "modified": [
-        "tests/loads.test.ts"
-      ],
-      "removed": [
-        "src/import/ai.ts",
-        "src/ui/AiPicker.tsx",
-        "src/ui/Assistant.tsx",
-        "tests/ai.test.ts"
-      ]
-    },
-    {
-      "at": "2026-11-24T09:34:50.975Z",
-      "added": [],
-      "modified": [
-        "AGENTS.md",
-        "README.md",
-        "docs/security-review.md"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:35:06.053Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T09:43:00.271Z",
-      "added": [],
-      "modified": [
-        ".vercelignore"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-24T09:44:52.030Z",
       "added": [],
@@ -4772,6 +4776,40 @@
     },
     {
       "at": "2026-11-24T10:09:13.584Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:05:54.111Z",
+      "added": [
+        "tests/serial-rows.test.ts"
+      ],
+      "modified": [
+        "src/import/equipment.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:06:01.287Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:08:12.439Z",
+      "added": [],
+      "modified": [
+        "src/ui/Loads.tsx"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:08:22.023Z",
       "added": [],
       "modified": [
         "docs/verification.json"
