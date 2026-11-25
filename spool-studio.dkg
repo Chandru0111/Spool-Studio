@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "f3326bed8ee0c885056ecffeb4130cefa8b7a086690e509b988bbafe47158270",
+  "sourceFingerprint": "5c78d632f5fd9b6b619affed8ffcc3d643b642f6cfa704b4b1e6808e44e13476",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -515,6 +515,42 @@
       {
         "file": "tests/bend-reference.test.ts",
         "name": "opens old project backups and preserves separate user guidance"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "reads full load however it is written, and part loads as fractions"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "does not take ratios, dual ratings or units for load points"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "finds frequency, weight, IP code and efficiency class by their names, abbreviations and units"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "refuses a label for another quantity or another value"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "gives the value in the parameter's unit and shape"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "takes efficiency and power factor at full load, the model by its heading, and the ticked parameters by name"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "takes the full-load value of a label listing several loads, and never a part-load one"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "finds the model by the words that head it, never a plant tag, and values at full load"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "takes the full-load columns, each row's own frequency, and the weight by its unit"
       },
       {
         "file": "tests/completion.test.ts",
@@ -1120,8 +1156,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-25T02:34:14.255Z",
-    "sourceFingerprint": "f3326bed8ee0c885056ecffeb4130cefa8b7a086690e509b988bbafe47158270",
+    "checkedAt": "2026-11-25T03:22:17.331Z",
+    "sourceFingerprint": "5c78d632f5fd9b6b619affed8ffcc3d643b642f6cfa704b4b1e6808e44e13476",
     "status": "passed",
     "steps": [
       {
@@ -1132,7 +1168,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  16 passed (16); Tests  151 passed (151)"
+        "summary": "Test Files  17 passed (17); Tests  160 passed (160)"
       },
       {
         "command": "npm run build",
@@ -1171,8 +1207,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 11082,
-      "sha256": "acb23384e49398a4d4cdb7c3fca1f60caf95b0b4fb5c59e374a82846cec581c3",
+      "bytes": 11488,
+      "sha256": "3401a836ee8ee897b5de9bdb6835bfdc7ebd431b0785f193aa5f59232798e0f4",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1200,7 +1236,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "59ddcefd1744c166f462b30b42c8aaa4b663642a8dca2d9821931bec8b2bad0b",
+      "sha256": "ff75dd2a965adc8c86482b9504490446c1ea4d229e916349ad72caad7960d179",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1696,8 +1732,8 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 23041,
-      "sha256": "7549c7a61e50909652afa7c916b9abb921cbdfdd3c37fea44b90fef33d08d173",
+      "bytes": 25132,
+      "sha256": "5737b189cc1de7ac8c434fe552b0d295de172f721beee00b8f69b4b824e41373",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "exports": [
         "Box",
@@ -1722,7 +1758,8 @@
         "../engine/sheet",
         "../store/schema",
         "./load-list",
-        "./parse"
+        "./parse",
+        "./vocabulary"
       ],
       "runtime": true
     },
@@ -1863,8 +1900,8 @@
     },
     {
       "path": "src/import/rating-table.ts",
-      "bytes": 29556,
-      "sha256": "e5f340f8015fadb4d33542441dd6b4940ca0103ad2ee7a9900fbb77acbd33581",
+      "bytes": 29959,
+      "sha256": "4c9a7bb5139b09149f9cd6b348fd1e7b0cd8adb6144157813aac29cca0df5a72",
       "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values.",
       "exports": [
         "catalogueFromTables"
@@ -1925,21 +1962,30 @@
     },
     {
       "path": "src/import/vocabulary.ts",
-      "bytes": 7967,
-      "sha256": "3789c654195eaa3459b6cd49eb5e4dab3c11d602b8e9d58cd20c7e3ad7475eb4",
+      "bytes": 20301,
+      "sha256": "6a293be022cb0c02f2499710ea0dcb194cb76379fca548b4a0802a14eb7c9977",
       "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix).",
       "exports": [
         "Field",
+        "ID_WORDS",
+        "LOAD_NOUNS",
+        "SHAPES",
+        "conceptOf",
+        "edits",
         "fieldsIn",
-        "fold"
+        "fold",
+        "loadsIn",
+        "nameScore",
+        "ratioOf",
+        "valueIn"
       ],
       "imports": [],
       "runtime": true
     },
     {
       "path": "src/import/webpage.ts",
-      "bytes": 15708,
-      "sha256": "37582a43146ab142b4e742c4fed688d842335d1cf9e256344946edc24d0b74a4",
+      "bytes": 20307,
+      "sha256": "1b368bbb4c9ea053dd19f603063f182dbb9f5dc9c5e09111f9c959bf9405e23d",
       "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright.",
       "exports": [
         "MAX_PAGE",
@@ -1956,7 +2002,8 @@
         "../store/schema",
         "./equipment",
         "./parse",
-        "./rating-table"
+        "./rating-table",
+        "./vocabulary"
       ],
       "runtime": true
     },
@@ -2064,8 +2111,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 29326,
-      "sha256": "7cf9083d7c1d73fb00c563290cc1511fb7ad8df8e8da2cbe361a606cd9113a5c",
+      "bytes": 29362,
+      "sha256": "92e573c1ba439bcc450afa90d5037bfc2c72c6c7ff03ce10c8fff0dabed2269d",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
@@ -2422,6 +2469,34 @@
       "tests": [
         "uses the supplied table boundaries without turning installation guidance into a drum limit",
         "opens old project backups and preserves separate user guidance"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/catalogue-params.test.ts",
+      "bytes": 7047,
+      "sha256": "c315bfa37cc92d74ca0e6c3ee2e0bc637daaa1e22b9a7af85aa7a699c061c788",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/engine/equipment-types",
+        "../src/import/equipment",
+        "../src/import/parse",
+        "../src/import/rating-table",
+        "../src/import/vocabulary",
+        "../src/import/webpage",
+        "vitest"
+      ],
+      "tests": [
+        "reads full load however it is written, and part loads as fractions",
+        "does not take ratios, dual ratings or units for load points",
+        "finds frequency, weight, IP code and efficiency class by their names, abbreviations and units",
+        "refuses a label for another quantity or another value",
+        "gives the value in the parameter's unit and shape",
+        "takes efficiency and power factor at full load, the model by its heading, and the ticked parameters by name",
+        "takes the full-load value of a label listing several loads, and never a part-load one",
+        "finds the model by the words that head it, never a plant tag, and values at full load",
+        "takes the full-load columns, each row's own frequency, and the weight by its unit"
       ],
       "runtime": false
     },
@@ -3228,6 +3303,12 @@
       "resolved": true
     },
     {
+      "from": "src/import/equipment.ts",
+      "to": "src/import/vocabulary.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
       "from": "src/import/load-list.ts",
       "to": "src/engine/sheet.ts",
       "relation": "imports",
@@ -3408,6 +3489,12 @@
     {
       "from": "src/import/webpage.ts",
       "to": "src/import/rating-table.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/import/vocabulary.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -4192,6 +4279,47 @@
       "relation": "external"
     },
     {
+      "from": "tests/catalogue-params.test.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/catalogue-params.test.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/catalogue-params.test.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/catalogue-params.test.ts",
+      "to": "src/import/rating-table.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/catalogue-params.test.ts",
+      "to": "src/import/vocabulary.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/catalogue-params.test.ts",
+      "to": "src/import/webpage.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/catalogue-params.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/completion.test.ts",
       "to": "src/engine/drums.ts",
       "relation": "imports",
@@ -4750,85 +4878,85 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-25T02:34:14.321Z",
+  "updatedAt": "2026-11-25T03:22:17.401Z",
   "history": [
     {
-      "at": "2026-11-25T02:05:54.111Z",
-      "added": [
-        "tests/serial-rows.test.ts"
-      ],
+      "at": "2026-11-25T03:11:38.800Z",
+      "added": [],
       "modified": [
-        "src/import/equipment.ts"
+        "src/import/vocabulary.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:06:01.287Z",
+      "at": "2026-11-25T03:12:20.801Z",
       "added": [],
       "modified": [
-        "docs/verification.json"
+        "src/import/vocabulary.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:08:12.439Z",
+      "at": "2026-11-25T03:13:15.458Z",
       "added": [],
       "modified": [
-        "src/ui/Loads.tsx"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:08:22.023Z",
+      "at": "2026-11-25T03:13:25.517Z",
       "added": [],
       "modified": [
-        "docs/verification.json"
+        "src/import/rating-table.ts",
+        "src/import/vocabulary.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:30:36.455Z",
+      "at": "2026-11-25T03:14:11.748Z",
       "added": [],
       "modified": [
-        "src/import/document.ts"
+        "src/import/webpage.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:31:02.196Z",
+      "at": "2026-11-25T03:14:27.127Z",
       "added": [],
       "modified": [
-        "src/ui/Catalogue.tsx",
-        "src/ui/app.css"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-25T02:31:12.838Z",
-      "added": [],
-      "modified": [
+        "src/import/webpage.ts",
         "src/ui/Catalogue.tsx"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:31:36.630Z",
+      "at": "2026-11-25T03:15:43.664Z",
       "added": [],
       "modified": [
-        "docs/verification.json"
+        "src/import/equipment.ts",
+        "src/import/vocabulary.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:31:42.032Z",
+      "at": "2026-11-25T03:17:33.192Z",
       "added": [
-        "tests/page-list.test.ts"
+        "tests/catalogue-params.test.ts"
       ],
       "modified": [],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:31:54.578Z",
+      "at": "2026-11-25T03:17:55.750Z",
+      "added": [],
+      "modified": [
+        "src/import/webpage.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T03:18:15.858Z",
       "added": [],
       "modified": [
         "docs/verification.json"
@@ -4836,16 +4964,15 @@
       "removed": []
     },
     {
-      "at": "2026-11-25T02:33:07.592Z",
+      "at": "2026-11-25T03:22:07.224Z",
       "added": [],
       "modified": [
-        "src/ui/Catalogue.tsx",
-        "src/ui/app.css"
+        "README.md"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T02:34:14.321Z",
+      "at": "2026-11-25T03:22:17.401Z",
       "added": [],
       "modified": [
         "docs/verification.json"

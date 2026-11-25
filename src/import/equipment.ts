@@ -1,4 +1,5 @@
 import {clip,emptyRow,type SheetRow} from '../engine/sheet';
+import {ID_WORDS,LOAD_NOUNS,fieldsIn,loadsIn} from './vocabulary';
 import {DUTIES,FROM_CATALOGUE,LOAD_KEYS,TICK,TICK_KEYS,emptyEntry,emptyLoad,fillRow,indexCatalogue,isTick,num,sameText,
  DEFAULT_FACTORS,DEFAULT_MARGIN,type CatalogueIndex,type CatalogueKey,type CatalogueRow,type Duty,type Factors,type LoadKey} from '../engine/loads';
 import type {LoadPanel,PageEvidence} from '../store/schema';
@@ -225,15 +226,37 @@ export function keepPicked(e:CatalogueRow,t:EquipmentType|undefined):CatalogueRo
  return out;
 }
 const N='(\\d+(?:[.,]\\d+)?)';
+// Between a label and its value: words, or the load point the value is at ("at 3/4 load", "at 100 % load").
+const Q=`(?:[^\\n\\d]|[1-8]\\s*\\/\\s*[1-8](?![\\d.,])|\\d{2,3}\\s*%\\s*(?:of\\s+)?(?:rated\\s+|full\\s+)?(?:${LOAD_NOUNS}))`;
 const LABELLED:[CatalogueKey,RegExp][]=[
- ['ratedKw',new RegExp(`power\\b[^\\n\\d]{0,30}${N}\\s*kW\\b`,'i')],
- ['inA',new RegExp(`(?:rated|nominal|full[\\s-]*load|input)\\s*current\\b[^\\n\\d]{0,30}${N}\\s*A\\b`,'i')],
- ['protA',new RegExp(`(?:breaker|fuse|protection|mccb|mcb)\\b[^\\n\\d]{0,30}${N}\\s*A\\b`,'i')],
- ['un',/voltage\b[^\n\d]{0,30}(\d{2,4})\s*V/i],
- ['efficiency',new RegExp(`efficiency\\b[^\\n\\d]{0,30}${N}`,'i')],
- ['pf',/(?:power\s*factor|cos\s*(?:φ|ϕ|phi|ф)?)[^\n\d]{0,20}(0[.,]\d+|1(?:[.,]0+)?)(?!\d)/i],
+ ['ratedKw',new RegExp(`power\\b${Q}{0,30}${N}\\s*kW\\b`,'giu')],
+ ['inA',new RegExp(`(?:rated|nominal|full[\\s-]*load|input)\\s*current\\b${Q}{0,30}${N}\\s*A\\b`,'giu')],
+ ['protA',new RegExp(`(?:breaker|fuse|protection|mccb|mcb)\\b${Q}{0,30}${N}\\s*A\\b`,'giu')],
+ ['un',new RegExp(`voltage\\b${Q}{0,30}(\\d{2,4})\\s*V`,'giu')],
+ ['efficiency',new RegExp(`efficiency\\b${Q}{0,30}${N}`,'giu')],
+ ['pf',new RegExp(`(?:power\\s*factor|cos\\s*(?:φ|ϕ|phi|ф)?)${Q}{0,20}(0[.,]\\d+|1(?:[.,]0+)?)(?!\\d)`,'giu')],
 ];
-const MODEL=/(?:article|order|part|catalog(?:ue)?|product)\s*(?:no\.?|number|code)\s*[:#.]?\s*([A-Z0-9][A-Z0-9./-]{3,40})|\b(?:model|type)\s*[:#]\s*([A-Z0-9][A-Z0-9./-]{2,40})/gi;
+// The value a label gives at full load: one said to be at full load, else the first that says no load point. Never one at
+// part load, nor one whose words between label and value name another parameter ("Efficiency class IE3", "at no load").
+function atFullLoad(text:string,re:RegExp):RegExpMatchArray|undefined {
+ let first:RegExpMatchArray|undefined;
+ for(const m of text.matchAll(re)){
+  const between=m[0].slice(0,m[0].lastIndexOf(m[1]!)),f=fieldsIn(between),loads=loadsIn(between);
+  if(f.has('skip')||f.has('hz')||f.has('mass')||f.has('ip')||f.has('ie')||loads.length===1&&loads[0]!==1)continue;
+  if(loads.length===1)return m;first??=m;
+ }
+ return first;
+}
+// Labels that head a model, type, part or order number in running text ("Motor type: …", "Model number …", "Part No. …"),
+// from the vocabulary's name and code headings. A label ending in a number word ("Part no", "Article number") may go
+// without a colon; a bare one ("Type", "Series") needs one. Words that also head other numbers (an ID, a reference, a
+// list's item number) are left out, so a plant tag (KKS) is never taken for a model, and a model holds a digit.
+const NUMBERED=/(?:(?:^|\s)(?:no|nr)|number|nummer|numer|code|kod|код|номер|号)$/u;
+const PROSE_OFF=new Set(['id','ident','ident no','reference','référence','referencia','referência','item no']);
+const altsOf=(ws:readonly string[])=>[...ws].sort((a,b)=>b.length-a.length).map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'[\\s.-]*')).join('|');
+const IDS=ID_WORDS.filter(w=>!PROSE_OFF.has(w)),NUMBERED_IDS=altsOf(IDS.filter(w=>NUMBERED.test(w))),PLAIN_IDS=altsOf(IDS.filter(w=>!NUMBERED.test(w)));
+const CODE='((?=[A-Z0-9./-]*\\d)[A-Z0-9][A-Z0-9./-]{2,40})';
+const MODEL=new RegExp(`(?<![\\p{L}\\p{N}])(?:(?:${NUMBERED_IDS})\\.?|(?:${PLAIN_IDS})\\s*(?:no\\.?|nr\\.?|number|code|#))\\s*[:#.]?\\s*${CODE}|(?<![\\p{L}\\p{N}])(?:${PLAIN_IDS})\\s*[:#：]\\s*${CODE}`,'giu');
 export const dot=(v:string)=>v.replace(',','.');
 // Decimals throughout: an efficiency of 94.2 (%) is kept as 0.942.
 export const asFraction=(v:string)=>{const n=num(dot(v));return n!==null&&n>1&&n<=100?String(+(n/100).toFixed(4)):dot(v);};
@@ -244,7 +267,7 @@ export function catalogueFromPages(pages:readonly PageEvidence[],file:string):Pr
   starts.forEach((s,i)=>{
    const block=page.text.slice(s,starts[i+1]??page.text.length),e=emptyEntry(),lines=new Set<string>();
    e.model=clip((marks[i]?.[1]??marks[i]?.[2]??'').trim());
-   for(const [k,re] of LABELLED){const m=block.match(re);if(!m?.[1])continue;e[k]=k==='efficiency'||k==='pf'?asFraction(m[1]):k==='un'?`${m[1]} V`:dot(m[1]);
+   for(const [k,re] of LABELLED){const m=atFullLoad(block,re);if(!m?.[1])continue;e[k]=k==='efficiency'||k==='pf'?asFraction(m[1]):k==='un'?`${m[1]} V`:dot(m[1]);
     const at=block.lastIndexOf('\n',m.index)+1,end=block.indexOf('\n',m.index);lines.add(block.slice(at,end<0?undefined:end).trim());}
    const found=FROM_CATALOGUE.filter(k=>e[k]).length;if(!found||!e.model&&found<2)return;
    const hz=block.match(/\b(50|60)\s*Hz/i)?.[1],ph=/\b3\s*(?:~|ph\b|phase|AC\b)|three[\s-]*phase/i.test(block)?'3-phase':/\b1\s*(?:~|ph\b|phase)|single[\s-]*phase/i.test(block)?'1-phase':'';

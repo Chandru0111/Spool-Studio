@@ -178,7 +178,7 @@ export function Catalogue() {
   catch(e){notify(message(e,'Could not read the catalogue.'));}finally{setBusy('');if(book.current)book.current.value='';}
  }
  function fromWeb(text:string,source:string){
-  const r=catalogueFromWeb(text,source);setPasting(false);
+  const r=catalogueFromWeb(text,source,chosen.current.flatMap(t=>t.params));setPasting(false);
   setRead({file:source,pages:[{page:1,text,mode:'text',confidence:null}],ocr:0,proposals:applyPick(r.proposals,chosen.current),brand:brand||r.brand,types:chosen.current});
  }
  // pages: the pages picked; null when the engineer chose to read them all.

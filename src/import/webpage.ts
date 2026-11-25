@@ -5,6 +5,7 @@ import {asFraction,catalogueFromPages,dot,verify,type Proposal} from './equipmen
 import type {PositionedLine,Rule} from './parse';
 import {catalogueFromTables} from './rating-table';
 import type {Param} from '../engine/equipment-types';
+import {SHAPES,conceptOf,loadsIn,nameScore,valueIn} from './vocabulary';
 
 // Vendor product pages. A browser will not let one website read another, and vendors block bots, so the page comes in through
 // the user's own browser: copied and pasted, or saved as .html. The HTML is only turned into text here, never shown or run.
@@ -53,7 +54,7 @@ export function redirectTarget(html:string):string|null {
 type Field=CatalogueKey|'hp'|'phase'|'hz';
 // Labels as vendors write them, best first: when a page has two (Efficiency and Nominal Efficiency), the earlier one wins.
 const LABELS:[Field,string[]][]=[
- ['model',['model','model no','model number','mfr model','mfr part no','mfr part number','manufacturer part number','part no','part number','catalog no','catalog number','catalogue number','article no','article number','order no','order code','order number','product code','product id','product number','type designation','data sheet','datasheet','product type designation']],
+ ['model',['model','model no','model number','motor type','type no','type number','model code','mfr model','mfr part no','mfr part number','manufacturer part number','part no','part number','catalog no','catalog number','catalogue number','article no','article number','order no','order code','order number','product code','product id','product number','type designation','data sheet','datasheet','product type designation','type']],
  ['brand',['brand','manufacturer','make']],
  ['ratedKw',['rated power','rated output','output power','motor power','nominal power','power','kw','output']],
  ['hp',['hp','horsepower','rated hp','motor hp','output hp']],
@@ -63,11 +64,13 @@ const LABELS:[Field,string[]][]=[
  ['pf',['power factor','full load power factor','pf','cos phi','cos φ','cosφ']],
  ['protA',['protection device rating','breaker rating','fuse rating','max fuse','maximum fuse','recommended fuse','mcb rating','mccb rating']],
  ['phase',['phase','phases','no of phases','number of phases']],
- ['hz',['frequency','hz','rated frequency']],
+ ['hz',['frequency','hz','rated frequency','freq','f','supply frequency','nominal frequency']],
 ];
 const label=(s:string)=>s.toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g,' ').replace(/[^a-z0-9φ]+/g,' ').trim();
 const FIELDS=new Map(LABELS.flatMap(([field,names])=>names.map((n,rank)=>[n,{field,rank}] as const)));
-type Pair={field:Field;rank:number;label:string;value:string;line:string};
+// load: the label or the row of load points above it says the value is at full load, or at part load ("3/4", "75 %").
+type Load='full'|'part';
+type Pair={field:Field;rank:number;label:string;value:string;line:string;load?:Load};
 const NUMERIC=new Set<Field>(['ratedKw','hp','inA','un','efficiency','pf','protA','hz']);
 // Datasheets write long labels ("supply voltage at AC", "efficiency at 4/4 load"). Those count by their longest known start,
 // only with a value in the field's unit, and never for signal inputs or losses ("input voltage at digital input", "power loss").
@@ -82,7 +85,7 @@ function fieldOf(name:string,value:string):{field:Field;rank:number}|undefined {
 }
 const pairOf=(name:string,value:string,line:string):Pair|null=>{
  const v=value.trim(),f=fieldOf(name,v);
- return f&&v&&!FIELDS.has(label(v))&&(!NUMERIC.has(f.field)||/\d/.test(v))?{field:f.field,rank:f.rank,label:name.trim(),value:v,line}:null;
+ return f&&v&&!FIELDS.has(label(v))&&(!NUMERIC.has(f.field)&&f.field!=='model'||/\d/.test(v))?{field:f.field,rank:f.rank,label:name.trim(),value:v,line}:null;
 };
 
 // Numbers as written: ranges and dual ratings (19.8-22.5, 115/230) are kept for the engineer to choose.
@@ -91,7 +94,9 @@ const horsepower=(v:string)=>{const t=dot(v);let m=t.match(/(\d+)\s+(\d+)\/(\d+)
 const HP_KW=0.7457;
 
 function entryOf(pairs:readonly Pair[],source:string):{entry:CatalogueRow;evidence:string[];converted:boolean;brand:string}|null {
- const best=new Map<Field,Pair>();for(const p of pairs){const b=best.get(p.field);if(!b||p.rank<b.rank)best.set(p.field,p);}
+ // A value at part load is never the rated one; one said to be at full load wins over one that does not say.
+ const best=new Map<Field,Pair>(),full=(p?:Pair)=>p?.load==='full';
+ for(const p of pairs){if(p.load==='part')continue;const b=best.get(p.field);if(!b||full(p)&&!full(b)||full(p)===full(b)&&p.rank<b.rank)best.set(p.field,p);}
  const e=emptyEntry(),get=(f:Field)=>best.get(f)?.value??'',evidence=new Set<string>();let converted=false;
  e.model=clip(get('model').split(/\s{2,}|\s\|\s/)[0]!.trim());
  const power=best.get('ratedKw')??best.get('hp');
@@ -131,31 +136,83 @@ function tables(lines:readonly string[]):{rows:Pair[][];used:Set<number>} {
  return {rows,used};
 }
 
-// Label/value pairs: table cells side by side (two or more pairs per row), "Label: value", or a label line with its value on the next line.
-function pairsOf(lines:readonly string[],skip:ReadonlySet<number>):Pair[] {
- const out:Pair[]=[],push=(p:Pair|null)=>{if(p)out.push(p);};
+// Every label printed with a value: table cells side by side (two or more pairs per row), "Label: value", or a label line
+// with its value on the next line.
+type Raw={label:string;value:string;line:string;load?:Load};
+// The value a label gives at full load. A label naming one load point ("Efficiency at 3/4 load", "cos φ FL") says which
+// load its value is at; one naming several ("Efficiency 100 / 75 / 50 %") gives a value for each, and only the one at full
+// load is taken.
+function atLoad(name:string,values:readonly string[]):{value:string;load?:Load} {
+ const loads=loadsIn(name),each=values.length>1?values:values[0]?.match(/\d+(?:[.,]\d+)?\s*%?/g)??[];
+ if(loads.length>1&&each.length===loads.length){const j=loads.indexOf(1);return j<0?{value:'',load:'part'}:{value:each[j]!,load:'full'};}
+ const value=values[0]??'';
+ return loads.length===1?{value,load:loads[0]===1?'full':'part'}:{value};
+}
+function candidates(lines:readonly string[],skip:ReadonlySet<number>):Raw[] {
+ const out:Raw[]=[],point=(c:string)=>c.trim().length<=12&&loadsIn(c).length===1;
+ // A row of load points ("Load  100 %  75 %  50 %", "4/4  3/4  2/4") heads the rows of values under it: a row takes its
+ // value from under full load, and gives none when no column is at full load.
+ let points:number[]|null=null;
  lines.forEach((line,i)=>{
   if(skip.has(i))return;
-  const cells=line.split('\t');
+  const cells=line.split('\t'),tail=cells[0]&&!point(cells[0])?cells.slice(1):cells;
+  if(tail.length>=2&&tail.every(point)){points=tail.map(c=>loadsIn(c)[0]!);return;}
+  if(points&&cells.length===points.length+1){const j=points.indexOf(1);out.push({label:cells[0]!,value:j<0?'':cells[j+1]!,line,load:j<0?'part':'full'});return;}
+  points=null;
   if(cells.length>=2){
    // A label wrapped onto the next line in a narrow column ("Full Load" above "Amps").
    const below=lines[i+1]?.split('\t')[0],head=below&&!fieldOf(cells[0]!,cells[1]!)&&fieldOf(`${cells[0]} ${below}`,cells[1]!)?`${cells[0]} ${below}`:cells[0]!;
-   push(pairOf(head,cells[1]!,head===cells[0]?line:`${line} ${below}`));for(let j=2;j+1<cells.length;j+=2)push(pairOf(cells[j]!,cells[j+1]!,line));return;
+   out.push({label:head,...atLoad(head,cells.slice(1)),line:head===cells[0]?line:`${line} ${below}`});
+   if(loadsIn(head).length<2)for(let j=2;j+1<cells.length;j+=2)out.push({label:cells[j]!,...atLoad(cells[j]!,[cells[j+1]!]),line});
+   return;
   }
   const parts=line.split(/\s+\|\s+/).map(s=>s.match(/^([^:]{1,40}):\s*(.+)$/)).filter(m=>m!==null);
-  if(parts.length){for(const m of parts)push(pairOf(m[1]!,m[2]!,line));return;}
+  if(parts.length){for(const m of parts)out.push({label:m[1]!,...atLoad(m[1]!,[m[2]!]),line});return;}
   // A label alone on its line takes the next line only when that is a lone value, not another label/value row.
-  const next=lines[i+1];if(next!==undefined&&!next.includes('\t')&&!skip.has(i+1)&&FIELDS.has(label(line)))push(pairOf(line,next,`${line} ${next}`));
+  const next=lines[i+1];if(next!==undefined&&!next.includes('\t')&&!skip.has(i+1)&&FIELDS.has(label(line)))out.push({label:line,value:next,line:`${line} ${next}`});
  });
  return out;
+}
+const pairsOf=(raw:readonly Raw[]):Pair[]=>raw.flatMap(r=>{const p=pairOf(r.label,r.value,r.line);return p?[r.load?{...p,load:r.load}:p]:[];});
+
+// The ticked catalogue-only parameters of a one-product sheet (frequency, weight, IP code, efficiency class, speed…): the
+// value of the label that names each best (nameScore), in the parameter's unit. A label two values fit equally names
+// neither. With no label, a code of its fixed shape printed only once (IP55, IE3), or the supply frequency the sheet
+// prints, is the product's.
+function extrasOf(text:string,params:readonly Param[]):{extra:Record<string,string>;evidence:string[]} {
+ // A page too long for its comparison tables still has its labels.
+ const lines=text.split('\n'),used=(()=>{try{return tables(lines).used;}catch{return new Set<number>();}})();
+ const raw=candidates(lines,used).filter(r=>r.load!=='part'&&r.value.trim()),extra:Record<string,string>={},evidence:string[]=[];
+ for(const p of params){
+  if(p.feeds||!p.label.trim())continue;
+  const fits=raw.flatMap(r=>{const s=nameScore(p,r.label,r.label,r.value),v=s>0?valueIn(p,r.value,r.label):null;return v?[{r,s,v}]:[];}).sort((a,b)=>b.s-a.s);
+  const top=fits[0],tie=fits.some(x=>x!==top&&x.s===top?.s&&x.v.value!==top.v.value);
+  let v=top&&!tie?top.v:null;
+  const concept=conceptOf(p.label),shape=concept&&SHAPES[concept];
+  if(!v&&shape){const all=new Set([...text.matchAll(new RegExp(shape[0].source,`${shape[0].flags}g`))].map(shape[1]));const only=[...all];
+   if(only.length===1)v={value:only[0]!};}
+  if(!v&&(concept==='hz'||/^hz$/i.test(p.unit.trim()))){const l=lines.find(x=>HZ.test(x));if(l)v={value:l.match(HZ)![1]!};}
+  if(!v)continue;
+  extra[p.key]=clip(v.value);
+  // A converted value shows what was printed, so the engineer can check the conversion.
+  evidence.push(v.was?`${p.label}: ${v.was} = ${v.value} ${p.unit}`:`${p.label}: ${v.value}`);
+ }
+ return {extra,evidence};
+}
+// The one product a sheet or page is about takes its catalogue-only parameters; a page that lists many takes none.
+function withExtras<T extends {proposals:Proposal[]}>(r:T,text:string,params:readonly Param[]):T {
+ const own=r.proposals.filter(p=>p.include);if(own.length!==1||!params.some(p=>!p.feeds))return r;
+ const {extra,evidence}=extrasOf(text,params),p=own[0]!;if(!Object.keys(extra).length)return r;
+ p.entry={...p.entry,extra:{...p.entry.extra,...extra}};p.evidence=[p.evidence,...evidence].filter(Boolean).join(' · ').slice(0,300);
+ return r;
 }
 
 const COPYRIGHT=/(?:©|\([Cc]\)|[Cc]opyright)\s*(?:[Cc]opyright|©)?\s*(?:\d{4}(?:\s*[-–]\s*\d{4})?\s*)?([A-Z][\w&.-]*(?: [A-Z][\w&.-]*)?)/;
 const HZ=/\b(50\/60|60\/50|50|60)\s*Hz\b/i;
-export const catalogueFromWeb=(text:string,source:string)=>catalogueFromText(text,`${source} (web page)`);
+export const catalogueFromWeb=(text:string,source:string,params:readonly Param[]=[])=>withExtras(catalogueFromText(text,`${source} (web page)`),text,params);
 export function catalogueFromText(text:string,source:string):{proposals:Proposal[];brand:string} {
  if(text.length>MAX_PAGE)throw Error('The page is larger than 5 MB. Copy only the product part of the page.');
- const lines=text.split('\n'),{rows,used}=tables(lines),pairs=pairsOf(lines,used),proposals:Proposal[]=[];
+ const lines=text.split('\n'),{rows,used}=tables(lines),pairs=pairsOf(candidates(lines,used)),proposals:Proposal[]=[];
  const hz=lines.find(l=>HZ.test(l));
  // A frequency written only in the product description ("Ue 230/400 V, 50 Hz") still belongs to the entry.
  if(hz)pairs.push({field:'hz',rank:99,label:'',value:hz.match(HZ)![1]!,line:hz});
@@ -195,5 +252,5 @@ export function catalogueFromDatasheet(pages:readonly PageEvidence[],file:string
  // A table whose rows carry their own model numbers is a catalogue. Rows named only by rating ("5.5 kW") may be load points
  // in a one-product sheet, so they win only when that sheet names no model.
  const rows=catalogueFromTables(layout,file,rules,params),named=rows.some(r=>!r.unverified.includes('model'));
- return rows.length>=2&&(named||!single.proposals.some(p=>p.entry.model))?{proposals:rows,brand:specs.brand}:single;
+ return rows.length>=2&&(named||!single.proposals.some(p=>p.entry.model))?{proposals:rows,brand:specs.brand}:withExtras(single,text,params);
 }
