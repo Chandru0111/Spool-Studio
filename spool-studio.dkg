@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "520a42dab8a716ba470cc07f7f77e694e580380c98e161124b8e83c7ac95474b",
+  "sourceFingerprint": "24943d3d57f9c7d67d3e3a9d7cb8f23f172fe8f4b02a43715880db1798014d5c",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -230,12 +230,12 @@
       "src/engine/drums.ts": "Pure layer/turn geometry, bend-radius and payload/lift constraints, per-run allowance and first-fit decreasing allocation.",
       "src/engine/result.ts": "Typed success/error union for recoverable engine results.",
       "src/import/load-list.ts": "ExcelJS read-only workbook import, CSV/TSV parser, header aliases, explicit unit cleanup, mapping and drum-template parsing. Ambiguous numbers remain invalid instead of being partially parsed.",
-      "src/import/document.ts": "Local PDF text extraction with position-aware columns, drawn table borders for equipment datasheet pages (rulesOf), and on-device PaddleOCR for scanned pages (ocrReader loads ONNX Runtime and the models from vendor/ocr/; imagePixels). Used by supplier drum imports and the catalogue datasheet reader.",
+      "src/import/document.ts": "Local PDF text extraction with position-aware columns, drawn table borders for equipment datasheet pages (rulesOf), and on-device PaddleOCR for scanned pages (ocrReader loads ONNX Runtime and the models from vendor/ocr/; imagePixels). Used by supplier drum imports and the catalogue datasheet reader. Equipment datasheet pages' text is built by phrases; cable catalogues keep item-by-item text.",
       "src/import/ocr.ts": "On-device PaddleOCR PP-OCRv5 mobile through ONNX Runtime Web (wasm; threads when the page is cross-origin isolated): DB text-line detection, a reader picked per page (Latin, Cyrillic or Chinese) by its confidence on the widest lines, greedy CTC decoding, each line read whole and its words shared out over its printed parts by length (parts found from ink, grid lines ignored). Models live in models/paddleocr (Apache-2.0, commits and hashes pinned).",
       "src/import/drum-catalogue.ts": "Supplier drum CSV/XLSX import or explicitly labelled/unit-qualified PDF/image text extraction. Candidate values require review before activation.",
-      "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading, ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs), and rulesOf (table borders and shaded cells from pdf.js's operator list, in page points); electrical catalogue UI is archived.",
+      "src/import/parse.ts": "Delimited text and cable-field extraction helpers shared with document reading, ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs), and rulesOf (table borders and shaded cells from pdf.js's operator list, in page points); electrical catalogue UI is archived. pdfLines turns pdf.js text items into positioned lines (shared by the app and the bench); phrases writes an equipment page's text as an engineer reads it: items a word space apart (judged by letter width) joined, wide gaps, drawn borders and dotted leaders parting columns.",
       "src/export/template.ts": "Patches only entered input cells in the original XLSX ZIP, retains all formulas/validations/styles, extends beyond 196 rows and adds preview caches.",
-      "src/store/schema.ts": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
+      "src/store/schema.ts": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns). Loads.learned: labels taught in the review (equipment type id, parameter key, label), at most 500.",
       "src/store/project.ts": "Tab-scoped sessionStorage autosave and erasure, targeted cleanup of legacy IndexedDB project keys, validated backup import and browser downloads.",
       "src/ui/Drums.tsx": "Linked or typed runs, geometry confirmation, adaptor controls, allocation cards and enquiry export.",
       "src/ui/DrumSources.tsx": "Supplier file chooser, extraction progress, review acknowledgement and basic/supplier selection.",
@@ -259,15 +259,18 @@
       "src/import/raster.ts": "Pure image helpers for drawings (plain RGBA arrays, linear in pixels): luminance, Otsu threshold, ink mask, line mask that ignores strongly coloured mark-ups, straight-stroke detection with thickness, quarter-turn rotation and mapping of rotated word boxes, and feeder tracing: busbars are long horizontal strokes with feeders (two if heavier than other long lines, else three; twice-bent cable routes rejected), feeders are followed through bends and across symbol gaps (breakers, fuses, coils) using an endpoint grid. Limits: 8,000 strokes, 60 busbars, 1,500 feeders.",
       "src/import/drawing-ocr.ts": "Image pipeline shared by browser and tests: OCR of the page as drawn (PaddleOCR reads text among line work; erasing lines cut letters) in three orientations (upright, upward, downward text) with tiling for large sheets (each word kept from the tile that owns its centre), noise filter for short words, lone capitals kept only after an adjacent word of similar height, de-duplication of words read twice, then busbar/feeder tracing with text masked. The OCR engine is injected. Also tokenBox, traceLines (vector PDF pages) and scaleGeometry.",
       "src/engine/loads.ts": "Equipment-list engine: row and catalogue shapes, catalogue index and fill (Brand + Model + Configuration), per-row kW/kVAr/load factor, panel and plant totals with operating factors and design margin, and the scenario comparison.",
-      "src/import/equipment.ts": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
+      "src/import/equipment.ts": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification. Proposal.doubt holds the parameters whose values do not add up with each other and the sums worked out (checks.ts).",
       "src/export/equipment.ts": "Load list Excel export: a cover page, then one sheet per panel laid out cell for cell as the engineer's designed panel sheet (equipment-layout.ts) with live formulas; catalogue-only export.",
       "src/ui/Loads.tsx": "Load list tab: panel tabs, the equipment grid (ticks, dropdowns, catalogue placeholders, Excel paste), panel totals with editable factors and margin, import, export and Send to cable sizing.",
-      "src/ui/Catalogue.tsx": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
+      "src/ui/Catalogue.tsx": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet. Amber cells for values that do not add up (checks.ts), rechecked on every edit. In the page view a parameter can be picked and its value clicked: the row takes it and the label printed before it is learned for that equipment type (project loads.learned; Forget learned labels clears them, Undo restores).",
       "src/ui/Scenario.tsx": "Search across panels by KKS/description, scenario comparison table and inline-SVG grouped bar charts, plant load by panel.",
       "src/export/equipment-layout.ts": "Panel sheet layout: header rows 1-6, at least 32 item rows, the running plant load, operating factors and load basis summary, page setup; formulas with cached results.",
-      "src/import/vocabulary.ts": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers.",
+      "src/import/vocabulary.ts": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers. Words printed for one another (HV/high, LV/low, Specs/standard) are alike; a load point (75 % load, full load) is not part of a name while no-load stays one word; what follows \"at\" in a printed label is its condition and never makes it another parameter. A label the engineer taught by clicking its value (Param.labels) names its parameter before any other route.",
       "src/import/rating-table.ts": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values. With equipment types picked (catalogueFromTables types), each table is read for the type whose ticked parameters its columns give most: feedsOf gives every load-list-feeding parameter its column by nameScore (one column each, best first, efficiency/pf at full load only), else the vocabulary/P-formula column of the one quantity its label names; a table needs two parameters with columns and half the required ones, so breaker, DB, capacitor and other non-motor tables are read and motor-only rules apply only without types.",
-      "src/import/webpage.ts": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright. With equipment types picked, a one-product sheet or page is read for each type (paramsOf: every ticked parameter, feeding or not, takes its best-named label, one value each, best first, full load preferred, part load only when the parameter is named at it, a unit like kvar printed once names its parameter, running-text lines split by looseOf); the product takes the type found most and its load list columns come only from that type's parameters, in the column's unit (W and hp as kW)."
+      "src/import/webpage.ts": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright. With equipment types picked, a one-product sheet or page is read for each type (paramsOf: every ticked parameter, feeding or not, takes its best-named label, one value each, best first, full load preferred, part load only when the parameter is named at it, a unit like kvar printed once names its parameter, running-text lines split by looseOf); the product takes the type found most and its load list columns come only from that type's parameters, in the column's unit (W and hp as kW). A label split by a symbol in another font (\"Efficiency (\", \"ɳ\", \") at 100% Load\") is rejoined at its brackets; a power in kVA or kvar is never kW; columns the chosen type does not fill are cleared; each value read is boxed where it is printed (placeOn: the item on the line after its label). Lines are read with the section heading printed over them (HV side, Losses). Two labels naming a parameter equally with different values are settled by the row's sums (checks.ts). pickAt reads a value clicked in the review's page view and the label printed before it; placeOn boxes a value printed as several items.",
+      "src/import/checks.ts": "An engineer's arithmetic on a datasheet row (checkRow): a kVA rating over √3·U gives each side's current, kW over √3·U·cosφ (·η for shaft output) gives a load's current, kVA over kVA plus no-load and load losses gives efficiency at power factor 1 or 0.8, and a load's protection is at least its current. Sides (HV/LV, primary/secondary, input/output) come from parameter names; phases from the row or its Phases parameter, a supply above 250 V being three-phase. A relation that fails flags its values as doubt with the sum; withCheck and checkAll apply it to review rows; withTypes uses it to choose between tied values.",
+      "src/engine/equipment-types.ts": "Equipment types as data: built-in list (motor to HV and MV transformers) and the user's own, each parameter feeding a load list column or kept with the entry only; pickedTypes, defaultOn, doubleFeeds. withLearned adds the labels the engineer taught (Param.labels) to the picked types before a read.",
+      "scripts/bench.mjs": "Private accuracy bench for the catalogue reader: bundles the reader for Node, reads each PDF in a folder (default samples/bench, ignored by git and deployment) exactly as the app does, and scores it against the engineer's confirmed <name>.json (types, pages, rows of expected values), per sheet and per parameter, also listing rows that do not add up. --draft <types> writes a starting <name>.json from the values read. Scanned pages are not benched."
     },
     "calculationReference": {
       "electrical": "I1 = kW × diversity × 1000 / (V × PF × (sqrt(3) for 3-phase, else 1)); Ib = I1 × sqrt(1 + THD²); Iz = It × parallel × Ca × Cg × Cs × Ci × Ct; circuit VD% = Ib × run_m × mV/A/m / (10 × parallel × V).",
@@ -330,7 +333,10 @@
       "DWG is not readable; export ASCII DXF or PDF. Binary DXF and block-definition text other than attributes are not read. AWG/kcmil sizes, DC systems and voltages outside the workbook list are kept but cannot be sized by the workbook.",
       "The workbook ratings cover LV cables (230–690 V). Medium/high-voltage drawings (e.g. 13.8 kV, 138 kV) are read and listed with their drawing voltage, but rows show as invalid on the sheet until MV rating tables are supplied.",
       "Earth fault loop, RCD, CPC and short-circuit columns AP-BO cover TN-S and TT only (SS 638:2018, IEC 60364). Ze and fault level default to blank (not assumed); a TT row needs Ze typed or a TT feeding row. Not modelled: TN-C, TN-C-S and IT systems, cable reactance (Zs reads low above about 35 mm2), the IEC 60909 voltage factor c and minimum fault currents, RCD discrimination, the TN-S times allowed for a bonded TT installation on an overcurrent device, electrode stability above 200 ohms, Annex A.3 exemptions, fuse Zs tables (type Ia). A separate copper CPC is taken as PVC-insulated and not bunched; armour and tape need catalogue area and resistance.",
-      "Load list: the export's intermittent reactive operating-factor formula intentionally follows the supplied template, which can differ from the app's total-load calculation. The panel sheet matches the designed \"Panel 1\" cell for cell (except the KKS heading); it has not been opened in Excel here, so the print preview is unchecked. Text placeholders in consumed load, efficiency or power factor are left out of the export. Scenario inputs are not saved; the In vs Ib check is not run on send; one header block per sheet is read on import; the equipment grid has no arrow-key navigation."
+      "Load list: the export's intermittent reactive operating-factor formula intentionally follows the supplied template, which can differ from the app's total-load calculation. The panel sheet matches the designed \"Panel 1\" cell for cell (except the KKS heading); it has not been opened in Excel here, so the print preview is unchecked. Text placeholders in consumed load, efficiency or power factor are left out of the export. Scenario inputs are not saved; the In vs Ib check is not run on send; one header block per sheet is read on import; the equipment grid has no arrow-key navigation.",
+      "Datasheet checks cover only kVA–voltage–current, kW–voltage–current–power factor–efficiency, losses–efficiency and protection against current; a wrong value that still adds up, or one in a relation missing a value, is not caught.",
+      "Learned labels apply per equipment type and exact printed label (spaces and case aside), on single-sheet label/value reading only, not per brand and not to rating-table headings.",
+      "The accuracy bench reads PDFs with a text layer only; scanned pages need the browser's OCR and are not scored."
     ],
     "changeGuide": [
       {
@@ -414,6 +420,23 @@
           "npm run check"
         ],
         "rule": "Keep extraction deterministic and value-preserving; record every worked-out value in inferred with a reason; keep limits and linear-time parsing; add a synthetic drawing test for each new layout or notation."
+      },
+      {
+        "task": "Change the catalogue reader",
+        "read": [
+          "src/import/webpage.ts",
+          "src/import/vocabulary.ts",
+          "src/import/checks.ts",
+          "src/import/parse.ts",
+          "tests/equipment-reading.test.ts",
+          "tests/catalogue-params.test.ts",
+          "tests/checks.test.ts"
+        ],
+        "checks": [
+          "npm test",
+          "npm run bench"
+        ],
+        "rule": "Run the bench on the engineer's own confirmed datasheets in samples/bench before and after the change; tests use made-up sheets only, and real datasheets are never committed."
       }
     ]
   },
@@ -445,6 +468,7 @@
       "src/export/equipment-layout.ts",
       "src/export/equipment.ts",
       "src/export/template.ts",
+      "src/import/checks.ts",
       "src/import/document.ts",
       "src/import/drawing-ocr.ts",
       "src/import/drum-catalogue.ts",
@@ -497,6 +521,7 @@
       "dev": "node scripts/build.mjs --serve",
       "build": "node scripts/build.mjs",
       "test": "vitest run",
+      "bench": "node scripts/bench.mjs",
       "typecheck": "tsc --noEmit",
       "verify:vendor": "node scripts/verify-vendor.mjs",
       "dkg": "node scripts/dkg.mjs",
@@ -551,6 +576,46 @@
       {
         "file": "tests/catalogue-params.test.ts",
         "name": "takes the full-load columns, each row's own frequency, and the weight by its unit"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "reads a value printed after a taught label, for that type only"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "takes the clicked value with the unit printed after it, and the words printed before it as the label"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "joins items set a word space apart, parts columns, and drops dotted leaders"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "keeps apart items a drawn border separates, however close"
+      },
+      {
+        "file": "tests/catalogue-params.test.ts",
+        "name": "reads labels under a heading with the heading, so each side of a transformer gets its own values"
+      },
+      {
+        "file": "tests/checks.test.ts",
+        "name": "passes a transformer whose currents, voltages, kVA, losses and efficiency agree"
+      },
+      {
+        "file": "tests/checks.test.ts",
+        "name": "flags the HV current read as the LV current, and an efficiency the losses do not give"
+      },
+      {
+        "file": "tests/checks.test.ts",
+        "name": "checks a motor by kW, voltage, current, power factor and efficiency, on one or three phases"
+      },
+      {
+        "file": "tests/checks.test.ts",
+        "name": "flags protection rated below the running current, and leaves ranges and missing values unchecked"
+      },
+      {
+        "file": "tests/checks.test.ts",
+        "name": "takes the one that adds up with the row, and none when neither does"
       },
       {
         "file": "tests/completion.test.ts",
@@ -659,6 +724,14 @@
       {
         "file": "tests/equipment-reading.test.ts",
         "name": "searches for the parameters the engineer added to their own type, from a pasted web page"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads it as an HV transformer: LV side into Un and In, kVA kept apart from kW, efficiency at full load"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "never takes kVA for the kW the load list needs, whatever type is picked"
       },
       {
         "file": "tests/equipment-reading.test.ts",
@@ -1188,8 +1261,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-25T06:04:14.700Z",
-    "sourceFingerprint": "520a42dab8a716ba470cc07f7f77e694e580380c98e161124b8e83c7ac95474b",
+    "checkedAt": "2026-11-25T08:08:38.436Z",
+    "sourceFingerprint": "24943d3d57f9c7d67d3e3a9d7cb8f23f172fe8f4b02a43715880db1798014d5c",
     "status": "passed",
     "steps": [
       {
@@ -1200,7 +1273,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  18 passed (18); Tests  189 passed (189)"
+        "summary": "Test Files  19 passed (19); Tests  202 passed (202)"
       },
       {
         "command": "npm run build",
@@ -1239,15 +1312,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 11954,
-      "sha256": "ed81362fc00a2ce138d72c7a96f293610e8497cc58d244cbdb86ccb5b22350b8",
+      "bytes": 13380,
+      "sha256": "b01f450a6b7332495b7892ee1b0e21c899cb9852c35f0e7ee2cd8c0d950612e2",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "docs/project-knowledge.json",
-      "bytes": 45894,
-      "sha256": "6b583bb282c7c9d67ce64f13dc57ecc954f3685358faef09d58e5c2c5db7ac2e",
+      "bytes": 50392,
+      "sha256": "df615c848828b72828235ef185035c8806bfee0d094b103787a690fe8d0e7d10",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1268,7 +1341,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "60df48eeeda2b879b03e387c3256613894d6270d982937015897f7faa94aab07",
+      "sha256": "d27cf51a0dfe3fe5cc50b8563e311dd83ddde0d98be076dc64c31093b8be6029",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1281,8 +1354,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 991,
-      "sha256": "694dd7c13a4249e3631d0cc442287f2e8e4f63b1fc88e00c0d4d0bcafee85c05",
+      "bytes": 1030,
+      "sha256": "8a1b7bdee863fd8e145482749839669adcbd4a696d67f8527583a5f3c18433ea",
       "role": "Project configuration.",
       "runtime": false
     },
@@ -1312,6 +1385,20 @@
       "bytes": 539457,
       "sha256": "12988f365ed8c4f738ce526f22a476ac81603a3dbe40e0f86f48cc468816255f",
       "role": "Local static asset.",
+      "runtime": false
+    },
+    {
+      "path": "scripts/bench.mjs",
+      "bytes": 7241,
+      "sha256": "b51fe0a5de5c4f77cbdbf61fb0f723166ba4f8171ce68584d433c7e8e56f085b",
+      "role": "Private accuracy bench for the catalogue reader: bundles the reader for Node, reads each PDF in a folder (default samples/bench, ignored by git and deployment) exactly as the app does, and scores it against the engineer's confirmed <name>.json (types, pages, rows of expected values), per sheet and per parameter, also listing rows that do not add up. --draft <types> writes a starting <name>.json from the values read. Scanned pages are not benched.",
+      "exports": [],
+      "imports": [
+        "esbuild",
+        "node:fs",
+        "node:path",
+        "node:url"
+      ],
       "runtime": false
     },
     {
@@ -1444,15 +1531,17 @@
     },
     {
       "path": "src/engine/equipment-types.ts",
-      "bytes": 7194,
-      "sha256": "f25ce82cd4a8a8eac537acfdfa3bdc937069a9c83fbe558e5730a103fbb7a2f5",
-      "role": "Project configuration.",
+      "bytes": 8623,
+      "sha256": "dc482585d78f45459eaa62a0591139466f931cde428f840f9786b320b46187fc",
+      "role": "Equipment types as data: built-in list (motor to HV and MV transformers) and the user's own, each parameter feeding a load list column or kept with the entry only; pickedTypes, defaultOn, doubleFeeds. withLearned adds the labels the engineer taught (Param.labels) to the picked types before a read.",
       "exports": [
         "BUILT_IN",
         "CUSTOM_GROUP",
         "EquipmentType",
         "Feed",
         "GROUPS",
+        "Learned",
+        "MAX_LEARNED",
         "MAX_PARAMS",
         "MAX_TYPES",
         "Param",
@@ -1460,7 +1549,8 @@
         "allTypes",
         "defaultOn",
         "doubleFeeds",
-        "pickedTypes"
+        "pickedTypes",
+        "withLearned"
       ],
       "imports": [
         "./loads"
@@ -1699,10 +1789,29 @@
       "runtime": true
     },
     {
+      "path": "src/import/checks.ts",
+      "bytes": 6538,
+      "sha256": "1e27cbb86cbd35b134042db2da14aa1ab57322cde1861723d2412dcf89c1f180",
+      "role": "An engineer's arithmetic on a datasheet row (checkRow): a kVA rating over √3·U gives each side's current, kW over √3·U·cosφ (·η for shaft output) gives a load's current, kVA over kVA plus no-load and load losses gives efficiency at power factor 1 or 0.8, and a load's protection is at least its current. Sides (HV/LV, primary/secondary, input/output) come from parameter names; phases from the row or its Phases parameter, a supply above 250 V being three-phase. A relation that fails flags its values as doubt with the sum; withCheck and checkAll apply it to review rows; withTypes uses it to choose between tied values.",
+      "exports": [
+        "Check",
+        "checkAll",
+        "checkRow",
+        "withCheck"
+      ],
+      "imports": [
+        "../engine/equipment-types",
+        "../engine/loads",
+        "./equipment",
+        "./vocabulary"
+      ],
+      "runtime": true
+    },
+    {
       "path": "src/import/document.ts",
-      "bytes": 12175,
-      "sha256": "89dd970704d24165042e6589065f06b45cab1a2eb5929e85a3bc57394918b42e",
-      "role": "Local PDF text extraction with position-aware columns, drawn table borders for equipment datasheet pages (rulesOf), and on-device PaddleOCR for scanned pages (ocrReader loads ONNX Runtime and the models from vendor/ocr/; imagePixels). Used by supplier drum imports and the catalogue datasheet reader.",
+      "bytes": 11808,
+      "sha256": "a0e5d82fb8bba2f974c512fe4983499c413adc996d315b29aacb789124eac2ad",
+      "role": "Local PDF text extraction with position-aware columns, drawn table borders for equipment datasheet pages (rulesOf), and on-device PaddleOCR for scanned pages (ocrReader loads ONNX Runtime and the models from vendor/ocr/; imagePixels). Used by supplier drum imports and the catalogue datasheet reader. Equipment datasheet pages' text is built by phrases; cable catalogues keep item-by-item text.",
       "exports": [
         "MAX_DOCUMENT",
         "MAX_PAGES",
@@ -1764,9 +1873,9 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 26393,
-      "sha256": "cdf04d76370e352a9230a5b81348513a7e232a14e62b6b2977c7893f95cebc5e",
-      "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
+      "bytes": 26542,
+      "sha256": "369b86800d88fd171a7eda0758d824f75cf3983a83ebbddc7499e63abad6b1c7",
+      "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification. Proposal.doubt holds the parameters whose values do not add up with each other and the sums worked out (checks.ts).",
       "exports": [
         "Box",
         "EquipmentRead",
@@ -1884,9 +1993,9 @@
     },
     {
       "path": "src/import/parse.ts",
-      "bytes": 14296,
-      "sha256": "48ca9ec8420c1bc763b1150d9f355f57d393963de2f2f84f6f4a445117f43e52",
-      "role": "Delimited text and cable-field extraction helpers shared with document reading, ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs), and rulesOf (table borders and shaded cells from pdf.js's operator list, in page points); electrical catalogue UI is archived.",
+      "bytes": 17062,
+      "sha256": "8ec82d32b27b32b422c771f117a4a6a756fda32784817131850c98a773f226fa",
+      "role": "Delimited text and cable-field extraction helpers shared with document reading, ocrLines (OCR word boxes to positioned lines in page points, so scanned rating tables are read like typed PDFs), and rulesOf (table borders and shaded cells from pdf.js's operator list, in page points); electrical catalogue UI is archived. pdfLines turns pdf.js text items into positioned lines (shared by the app and the bench); phrases writes an equipment page's text as an engineer reads it: items a word space apart (judged by letter width) joined, wide gaps, drawn borders and dotted leaders parting columns.",
       "exports": [
         "MAX_COLS",
         "MAX_ROWS",
@@ -1895,9 +2004,12 @@
         "blankRating",
         "extractCandidates",
         "extractPositionedTable",
+        "hasFigureRows",
         "ocrLines",
         "parseDelimited",
         "parseTable",
+        "pdfLines",
+        "phrases",
         "reviewProblems",
         "rulesOf"
       ],
@@ -1997,9 +2109,9 @@
     },
     {
       "path": "src/import/vocabulary.ts",
-      "bytes": 25940,
-      "sha256": "17fc4e6fe816818f51aa0c2ffeec6faf41e3785657b7cc845acdd1d43892a6e9",
-      "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers.",
+      "bytes": 27276,
+      "sha256": "f0225fe8619883b3f2fa3c7a9149c44dcab24902cfd68e9479703a87b3524095",
+      "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers. Words printed for one another (HV/high, LV/low, Specs/standard) are alike; a load point (75 % load, full load) is not part of a name while no-load stays one word; what follows \"at\" in a printed label is its condition and never makes it another parameter. A label the engineer taught by clicking its value (Param.labels) names its parameter before any other route.",
       "exports": [
         "Field",
         "ID_WORDS",
@@ -2015,6 +2127,7 @@
         "ratioOf",
         "unitIn",
         "unitNames",
+        "unitOf",
         "valueIn"
       ],
       "imports": [],
@@ -2022,15 +2135,16 @@
     },
     {
       "path": "src/import/webpage.ts",
-      "bytes": 24126,
-      "sha256": "e65d63b440ec3482a24825c5efcd49bba14b732475d013a9e33116f225995859",
-      "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright. With equipment types picked, a one-product sheet or page is read for each type (paramsOf: every ticked parameter, feeding or not, takes its best-named label, one value each, best first, full load preferred, part load only when the parameter is named at it, a unit like kvar printed once names its parameter, running-text lines split by looseOf); the product takes the type found most and its load list columns come only from that type's parameters, in the column's unit (W and hp as kW).",
+      "bytes": 29826,
+      "sha256": "34e591cd613220ce75883e38f9dff5e573c5a20bc2cbb52a03b01a9d0e20b8b6",
+      "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright. With equipment types picked, a one-product sheet or page is read for each type (paramsOf: every ticked parameter, feeding or not, takes its best-named label, one value each, best first, full load preferred, part load only when the parameter is named at it, a unit like kvar printed once names its parameter, running-text lines split by looseOf); the product takes the type found most and its load list columns come only from that type's parameters, in the column's unit (W and hp as kW). A label split by a symbol in another font (\"Efficiency (\", \"ɳ\", \") at 100% Load\") is rejoined at its brackets; a power in kVA or kvar is never kW; columns the chosen type does not fill are cleared; each value read is boxed where it is printed (placeOn: the item on the line after its label). Lines are read with the section heading printed over them (HV side, Losses). Two labels naming a parameter equally with different values are settled by the row's sums (checks.ts). pickAt reads a value clicked in the review's page view and the label printed before it; placeOn boxes a value printed as several items.",
       "exports": [
         "MAX_PAGE",
         "catalogueFromDatasheet",
         "catalogueFromText",
         "catalogueFromWeb",
         "pageText",
+        "pickAt",
         "redirectTarget"
       ],
       "imports": [
@@ -2038,6 +2152,7 @@
         "../engine/loads",
         "../engine/sheet",
         "../store/schema",
+        "./checks",
         "./equipment",
         "./parse",
         "./rating-table",
@@ -2080,9 +2195,9 @@
     },
     {
       "path": "src/store/schema.ts",
-      "bytes": 8755,
-      "sha256": "f0c5687b25f9ec828155cc29c472b8011b1fa4b12b964bbe2911b471ae5becb2",
-      "role": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns).",
+      "bytes": 9137,
+      "sha256": "4bcddd12f494b4cb109d958cf805829a43d2eee5feba27d5b5116aacd52bf767",
+      "role": "Zod version-2 project, worksheet rows, cable geometry and drum library schemas. Some document-reading schemas remain for supplier extraction. Project carries sheetLayout 8; a project without it is migrated once by LEGACY_FAULT (step06 and step07 fault input letters to their step08 columns). Loads.learned: labels taught in the review (equipment type id, parameter key, label), at most 500.",
       "exports": [
         "BendGuidance",
         "CableGeometry",
@@ -2149,9 +2264,9 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 29291,
-      "sha256": "fb6003f2f94e5670126102132921ddc565a0f118dfbe961b4b9cef76419c6adf",
-      "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
+      "bytes": 33891,
+      "sha256": "68769beb6fd83df816f89c2395d9467cae099048a9e0f9e4a360a1f509daae83",
+      "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet. Amber cells for values that do not add up (checks.ts), rechecked on every edit. In the page view a parameter can be picked and its value clicked: the row takes it and the label printed before it is learned for that equipment type (project loads.learned; Forget learned labels clears them, Undo restores).",
       "exports": [
         "Catalogue"
       ],
@@ -2160,10 +2275,12 @@
         "../engine/loads",
         "../engine/sheet",
         "../export/equipment",
+        "../import/checks",
         "../import/document",
         "../import/equipment",
         "../import/load-list",
         "../import/parse",
+        "../import/vocabulary",
         "../import/webpage",
         "../store/schema",
         "./TypePicker",
@@ -2401,8 +2518,8 @@
     },
     {
       "path": "src/ui/app.css",
-      "bytes": 103604,
-      "sha256": "77ca7194846452ab97af3ea1defa4748d813dffc87ec05fc593d9611972985c2",
+      "bytes": 104513,
+      "sha256": "c4a3baecbc11d836eb32dabcc6017b72bca2353e7c1b4c1713f6bcbf4648868c",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -2512,8 +2629,8 @@
     },
     {
       "path": "tests/catalogue-params.test.ts",
-      "bytes": 7042,
-      "sha256": "8398170bf5ef31f164fdcff181c21af8eea4159c51d0d692f53a7ddbf6ef95b0",
+      "bytes": 10035,
+      "sha256": "5053d816e1b6034e04c41980f19d9bb64d9f3d72c524295d7396285d5b9a8df6",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2534,7 +2651,34 @@
         "takes efficiency and power factor at full load, the model by its heading, and the ticked parameters by name",
         "takes the full-load value of a label listing several loads, and never a part-load one",
         "finds the model by the words that head it, never a plant tag, and values at full load",
-        "takes the full-load columns, each row's own frequency, and the weight by its unit"
+        "takes the full-load columns, each row's own frequency, and the weight by its unit",
+        "reads a value printed after a taught label, for that type only",
+        "takes the clicked value with the unit printed after it, and the words printed before it as the label",
+        "joins items set a word space apart, parts columns, and drops dotted leaders",
+        "keeps apart items a drawn border separates, however close",
+        "reads labels under a heading with the heading, so each side of a transformer gets its own values"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/checks.test.ts",
+      "bytes": 3500,
+      "sha256": "7b9d3e6f6b8b0b39e4ab2a0e7767ac32ddb43f1377b643a63cf57acb90b6a870",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/engine/equipment-types",
+        "../src/engine/loads",
+        "../src/import/checks",
+        "../src/import/webpage",
+        "vitest"
+      ],
+      "tests": [
+        "passes a transformer whose currents, voltages, kVA, losses and efficiency agree",
+        "flags the HV current read as the LV current, and an efficiency the losses do not give",
+        "checks a motor by kW, voltage, current, power factor and efficiency, on one or three phases",
+        "flags protection rated below the running current, and leaves ranges and missing values unchecked",
+        "takes the one that adds up with the row, and none when neither does"
       ],
       "runtime": false
     },
@@ -2599,8 +2743,8 @@
     },
     {
       "path": "tests/equipment-reading.test.ts",
-      "bytes": 8572,
-      "sha256": "2ad4f85c174d19fd6ef7ce7e25e37c8e33ea1730f4b069cff6d6b64a929bb470",
+      "bytes": 10534,
+      "sha256": "7af0e732d4b440ff25d8731fc99eece764efd0986387ad5269cdef95f9a5d7f1",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2618,6 +2762,8 @@
         "reads a distribution board from its own wording",
         "picks the type whose parameters the sheet gives, of several picked",
         "searches for the parameters the engineer added to their own type, from a pasted web page",
+        "reads it as an HV transformer: LV side into Un and In, kVA kept apart from kW, efficiency at full load",
+        "never takes kVA for the kW the load list needs, whatever type is picked",
         "reads a breaker table into the protection rating, its voltage and breaking capacity",
         "reads no table without equipment types unless it lists motors"
       ],
@@ -2725,8 +2871,8 @@
     },
     {
       "path": "tests/loads.test.ts",
-      "bytes": 36448,
-      "sha256": "71ad754a8d70c8e08b609466b5eddea00ed25dda8eeaf79726751f5f38ca3695",
+      "bytes": 36459,
+      "sha256": "9101db40e332a9f637c94fcc45aa8e452c4a6b4f26eb3ead2e600bbb8bfd2915",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -3032,6 +3178,26 @@
   ],
   "edges": [
     {
+      "from": "scripts/bench.mjs",
+      "to": "esbuild",
+      "relation": "external"
+    },
+    {
+      "from": "scripts/bench.mjs",
+      "to": "node:fs",
+      "relation": "external"
+    },
+    {
+      "from": "scripts/bench.mjs",
+      "to": "node:path",
+      "relation": "external"
+    },
+    {
+      "from": "scripts/bench.mjs",
+      "to": "node:url",
+      "relation": "external"
+    },
+    {
       "from": "scripts/build.mjs",
       "to": "scripts/dkg.mjs",
       "relation": "imports",
@@ -3270,6 +3436,30 @@
       "from": "src/export/template.ts",
       "to": "jszip",
       "relation": "external"
+    },
+    {
+      "from": "src/import/checks.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/checks.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/checks.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/checks.ts",
+      "to": "src/import/vocabulary.ts",
+      "relation": "imports",
+      "resolved": true
     },
     {
       "from": "src/import/document.ts",
@@ -3540,6 +3730,12 @@
     },
     {
       "from": "src/import/webpage.ts",
+      "to": "src/import/checks.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
       "to": "src/import/equipment.ts",
       "relation": "imports",
       "resolved": true
@@ -3709,6 +3905,12 @@
     },
     {
       "from": "src/ui/Catalogue.tsx",
+      "to": "src/import/checks.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
       "to": "src/import/document.ts",
       "relation": "imports",
       "resolved": true
@@ -3728,6 +3930,12 @@
     {
       "from": "src/ui/Catalogue.tsx",
       "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
+      "to": "src/import/vocabulary.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -4384,6 +4592,35 @@
       "relation": "external"
     },
     {
+      "from": "tests/checks.test.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/checks.test.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/checks.test.ts",
+      "to": "src/import/checks.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/checks.test.ts",
+      "to": "src/import/webpage.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/checks.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/completion.test.ts",
       "to": "src/engine/drums.ts",
       "relation": "imports",
@@ -4977,61 +5214,60 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-25T06:04:14.770Z",
+  "updatedAt": "2026-11-25T08:08:38.509Z",
   "history": [
     {
-      "at": "2026-11-25T03:13:15.458Z",
+      "at": "2026-11-25T08:00:34.325Z",
       "added": [],
       "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-25T03:13:25.517Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts",
-        "src/import/vocabulary.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-25T03:14:11.748Z",
-      "added": [],
-      "modified": [
-        "src/import/webpage.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-25T03:14:27.127Z",
-      "added": [],
-      "modified": [
-        "src/import/webpage.ts",
         "src/ui/Catalogue.tsx"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T03:15:43.664Z",
+      "at": "2026-11-25T08:00:39.157Z",
       "added": [],
       "modified": [
-        "src/import/equipment.ts",
-        "src/import/vocabulary.ts"
+        "src/ui/app.css"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T03:17:33.192Z",
-      "added": [
+      "at": "2026-11-25T08:00:59.807Z",
+      "added": [],
+      "modified": [
         "tests/catalogue-params.test.ts"
       ],
-      "modified": [],
       "removed": []
     },
     {
-      "at": "2026-11-25T03:17:55.750Z",
+      "at": "2026-11-25T08:02:36.723Z",
+      "added": [],
+      "modified": [
+        "src/import/document.ts",
+        "src/import/parse.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T08:02:52.931Z",
+      "added": [],
+      "modified": [
+        "scripts/bench.mjs",
+        "src/import/document.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T08:03:22.843Z",
+      "added": [],
+      "modified": [
+        "src/import/parse.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T08:03:53.542Z",
       "added": [],
       "modified": [
         "src/import/webpage.ts"
@@ -5039,49 +5275,42 @@
       "removed": []
     },
     {
-      "at": "2026-11-25T03:18:15.858Z",
+      "at": "2026-11-25T08:04:24.854Z",
       "added": [],
       "modified": [
-        "docs/verification.json"
+        "src/import/parse.ts",
+        "tests/catalogue-params.test.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T03:22:07.224Z",
+      "at": "2026-11-25T08:04:42.467Z",
       "added": [],
       "modified": [
-        "README.md"
+        "src/import/webpage.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T03:22:17.401Z",
+      "at": "2026-11-25T08:06:32.606Z",
       "added": [],
       "modified": [
-        "docs/verification.json"
+        "src/import/checks.ts",
+        "tests/checks.test.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T06:04:13.929Z",
-      "added": [
-        "tests/equipment-reading.test.ts"
-      ],
+      "at": "2026-11-25T08:08:28.703Z",
+      "added": [],
       "modified": [
         "README.md",
-        "docs/project-knowledge.json",
-        "src/import/equipment.ts",
-        "src/import/rating-table.ts",
-        "src/import/vocabulary.ts",
-        "src/import/webpage.ts",
-        "src/ui/Catalogue.tsx",
-        "tests/catalogue-params.test.ts",
-        "tests/rating-table-params.test.ts"
+        "docs/project-knowledge.json"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T06:04:14.770Z",
+      "at": "2026-11-25T08:08:38.509Z",
       "added": [],
       "modified": [
         "docs/verification.json"

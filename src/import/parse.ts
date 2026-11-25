@@ -127,6 +127,44 @@ export function rulesOf(fnArray:ArrayLike<number>,argsArray:readonly unknown[],o
 // OCR words in the text layer's terms, so the table reader reads a scan as it reads a typed PDF: each word's box turned
 // into page points by toPoint (pixel x, y from the top left in; PDF x, y from the bottom left out), words at one height
 // gathered into a line, and words a space apart into one item ("Rated Power", "AXR 315MB2").
+// A PDF page's text items as lines: items within 3 points of one baseline, left to right, top line first; the text keeps
+// two spaces between items so table cells and "label    value" columns stay apart. Shared by the app's PDF reader
+// (document.ts) and the accuracy bench (scripts/bench.mjs), so both read a page the same way.
+export function pdfLines(items:readonly object[]):{lines:PositionedLine[];text:string} {
+ const rows=new Map<number,{x:number;w:number;h:number;y:number;text:string}[]>();
+ for(const item of items){
+  if(!('str' in item)||typeof item.str!=='string'||!item.str.trim())continue;
+  const {transform:t=[],width,height}=item as {transform?:number[];width?:number;height?:number},y=Math.round((t[5]??0)/3)*3,row=rows.get(y)??[];
+  row.push({x:t[4]??0,w:width||0,h:height||0,y:t[5]??0,text:item.str});rows.set(y,row);
+ }
+ const lines=[...rows.entries()].sort((a,b)=>b[0]-a[0]).map(([,row])=>({cells:row.sort((a,b)=>a.x-b.x)}));
+ return {lines,text:lines.map(l=>l.cells.map(c=>c.text).join('  ')).join('\n')};
+}
+// A datasheet line as an engineer reads it: items set close together are one phrase (a PDF that writes each word as an
+// item, a label split at a ligature or at a symbol in another font), joined by a space, or by nothing when they touch.
+// A wide gap, a drawn border between them, or a dotted leader ("Rated current ...... 21 A") parts two columns, written
+// as two spaces as pdfLines does. rules: the page's drawn borders, when read.
+const LEADER=/^[\s.·…_-]{3,}$/;
+export function phrases(lines:readonly PositionedLine[],rules:readonly Rule[]=[]):string {
+ const walls=rules.filter(r=>Math.abs(r.x1-r.x0)<2);
+ return lines.map(l=>{
+  let out='',prev:PositionedLine['cells'][number]|undefined;
+  for(const c of l.cells){
+   if(LEADER.test(c.text)){prev=undefined;continue;}
+   if(prev){
+    // A word space is judged against the letters around it, as the eye does: about a letter wide in a fixed-width font,
+    // half that in most others; a gap over 1.2 letters (and over 0.7 of the font size) is a column.
+    const end=prev.x+(prev.w??0),em=c.h||prev.h||10,gap=c.x-end,y=c.y??l.y??0,letter=((prev.w??0)/Math.max(1,prev.text.length)+(c.w??0)/Math.max(1,c.text.length))/2;
+    const wall=walls.some(r=>r.x0>=end-1&&r.x0<=c.x+1&&Math.min(r.y0,r.y1)<=y+em&&Math.max(r.y0,r.y1)>=y);
+    out+=!prev.w||wall||gap>Math.min(letter*1.2,em*0.7)?'  ':gap<em*0.08?'':' ';
+   }else if(out)out+='  ';
+   out+=c.text;prev=c;
+  }
+  return out.trim();
+ }).join('\n');
+}
+// Two or more lines with three or more figures: a page with a table worth reading its drawn borders for.
+export const hasFigureRows=(lines:readonly PositionedLine[])=>lines.filter(l=>l.cells.filter(c=>/^\s*-?\d+(?:[.,]\d+)?\s*$/.test(c.text)).length>=3).length>=2;
 export function ocrLines(words:readonly {text:string;bbox:{x0:number;y0:number;x1:number;y1:number}}[],toPoint:(x:number,y:number)=>number[]):PositionedLine[] {
   const items=words.filter(w=>w.text.trim()).map(w=>{const [x0=0,y0=0]=toPoint(w.bbox.x0,w.bbox.y1),[x1=0,y1=0]=toPoint(w.bbox.x1,w.bbox.y0);return {x:x0,w:x1-x0,h:y1-y0,y:y0,text:w.text.trim()};}).sort((a,b)=>b.y+b.h/2-(a.y+a.h/2));
   const lines:(typeof items)[]=[];

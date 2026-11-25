@@ -20,7 +20,7 @@ function sample(p:Param,i:number):{printed:string;stored:string} {
   case 'kW':return {printed:`${n(10)} kW`,stored:n(10)};
   case 'W':return p.feeds?{printed:`${n(100)} W`,stored:String((100+i)/1000)}:{printed:`${n(100)} W`,stored:n(100)};
   case 'V':return {printed:`${n(400)} V`,stored:p.feeds?`${n(400)} V`:n(400)};
-  case '%':return p.feeds?{printed:`${n(90)} %`,stored:String((90+i)/100)}:{printed:`${n(4)} %`,stored:n(4)};
+  case '%':return p.feeds?{printed:`${90+i%10} %`,stored:String((90+i%10)/100)}:{printed:`${n(4)} %`,stored:n(4)};
   case 'Hz':return {printed:'50 Hz',stored:'50'};
   case '':return p.feeds==='pf'?{printed:`0.8${i%10}`,stored:`0.8${i%10}`}:{printed:n(2),stored:n(2)};
   default:return {printed:`${n(20)} ${p.unit}`,stored:n(20)};
@@ -91,6 +91,29 @@ describe('reading a datasheet for each equipment type',()=>{
    'Full load current\t28 A','Impeller dia.\t250 mm'].join('\n'),'https://vendor.example/px',[pump]);
   expect(r!.entry).toMatchObject({model:'PX-80-250',ratedKw:'15',un:'400 V',inA:'28',type:'c-pump'});
   expect(r!.entry.extra).toEqual({'p-4':'120','p-5':'32','p-6':'250'});
+ });
+});
+
+describe('reading a transformer data sheet laid out in two columns',()=>{
+ // Made-up sheet in the layout transformer makers use: two label/value columns per line, units in brackets, the η and φ
+ // of a label set in another font (so the PDF text comes apart at them), sides named high and low voltage.
+ const sheet=['TRANSFORMER DATA SHEET','Customer: Made-up Utility TR 1600kVA (Step Up 0.4/11)',
+  'Rated Power [kVA]  1600  Vector Group  YNd 11','Rated High Voltage [V]  11000  Connections [HV/LV]  Star/Delta','Rated Low Voltage [V]  415  Type of Cooling  ONAN',
+  'Number of Phases [  ɸ  ]  3  Standard/Specs.  IEC 60076','No-Load Loss [kW]  2.100  Impedance [%]  6.0','Load Loss at Principal Tap [kW]  17.500  Frequency [Hz]  50',
+  'HV Line Current [A]  83.98  Efficiency (  ɳ  ) at 100% Load 1.0 PF  98.70%','LV Line Current [A]  2225.9  Efficiency (  ɳ  ) at 50% Load 1.0 PF  99.10%',
+  'Temp. Rise (Oil/Winding) [K]  60/65  Total Mass [kg]  5200'];
+ const types=['motor','lv-transformer','mv-transformer','hv-transformer'].map(type);
+ it('reads it as an HV transformer: LV side into Un and In, kVA kept apart from kW, efficiency at full load',()=>{
+  const [r,...more]=read(sheet,types);
+  expect(more).toHaveLength(0);
+  expect(r!.entry).toMatchObject({type:'hv-transformer',ratedKw:'',un:'415 V',inA:'2225.9',efficiency:'0.987',pf:'',protA:''});
+  expect(r!.entry.extra).toMatchObject({'rated-power':'1600','hv-voltage':'11','hv-current':'83.98',frequency:'50',phases:'3','vector-group':'YNd 11',
+   'impedance-uk':'6.0','no-load-losses':'2.100','load-losses':'17.500',cooling:'ONAN','temperature-rise-oil-winding':'60/65',standard:'IEC 60076',weight:'5200'});
+  expect(r!.evidence).toContain('11000 V = 11 kV');
+  expect(r!.unverified).toEqual(['model']);
+ });
+ it('never takes kVA for the kW the load list needs, whatever type is picked',()=>{
+  for(const t of types)expect(read(sheet,[t])[0]?.entry.ratedKw??'',t.id).toBe('');
  });
 });
 

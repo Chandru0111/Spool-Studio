@@ -275,3 +275,9 @@ button.link{border:0;background:none;padding:0;color:var(--accent);font:inherit;
 .form-error{color:var(--bad);font-size:12px;margin-right:auto}.type-card .form-error{margin:8px 0 0}
 .schematic-table td.off-cell{background:var(--sunken)}.schematic-table td.off-cell input{color:var(--text-3)}.schematic-table td select{width:100%;min-width:150px;border:0;background:transparent;color:inherit;font:inherit;padding:4px 2px}
 .catalogue-sheet td.type-cell select{width:100%;height:100%;border:0;background:transparent;color:inherit;font-size:12px;padding:0 6px}.catalogue-sheet td.extras-cell{font-size:12px;color:var(--text-2);padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Datasheet review: red = not found on its page or required and missing; amber = does not add up with the row's other values. */
+.schematic-table td.bad,.schematic-table td.bad input{background:var(--bad-soft);color:var(--bad)}.schematic-table td.doubt,.schematic-table td.doubt input{background:var(--warn-soft);color:var(--warn)}
+/* Page view, correcting a value: every printed item can be clicked; the bar picks the parameter it is for. */
+.teach-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 12px;margin-top:10px}.teach-bar .field{min-width:220px}.teach-bar>span{flex:1 1 260px;font-size:12px;padding-bottom:7px}
+.page-item{position:absolute;padding:0;border:1px dashed var(--info-line);border-radius:2px;background:transparent;cursor:crosshair}.page-item:hover,.page-item:focus-visible{border:2px solid var(--info);background:color-mix(in srgb,var(--info) 14%,transparent);outline:none}

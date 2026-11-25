@@ -154,7 +154,7 @@ describe('importing an equipment workbook',()=>{
  });
  it('lets old projects open with an empty load list',()=>{
   const old=JSON.parse(JSON.stringify(fresh()));delete old.loads;
-  expect(Project.parse(old).loads).toEqual({panels:[],catalogue:[],source:'',types:[]});
+  expect(Project.parse(old).loads).toEqual({panels:[],catalogue:[],source:'',types:[],learned:[]});
  });
 });
 

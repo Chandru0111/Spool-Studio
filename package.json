@@ -7,6 +7,7 @@
     "dev": "node scripts/build.mjs --serve",
     "build": "node scripts/build.mjs",
     "test": "vitest run",
+    "bench": "node scripts/bench.mjs",
     "typecheck": "tsc --noEmit",
     "verify:vendor": "node scripts/verify-vendor.mjs",
     "dkg": "node scripts/dkg.mjs",

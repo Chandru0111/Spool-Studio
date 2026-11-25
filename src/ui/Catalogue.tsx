@@ -5,8 +5,9 @@ import {CATALOGUE_KEYS,emptyEntry,unique,sameText,type CatalogueKey} from '../en
 import {clip,MAX_CELL} from '../engine/sheet';
 import {readTables} from '../import/load-list';
 import {readCatalogue,renderPage,closePage,pageCount,pageList,rangesOf} from '../import/document';
-import {readEquipment,mergeCatalogue,locate,type Proposal} from '../import/equipment';
-import {catalogueFromDatasheet,catalogueFromWeb,pageText,redirectTarget,MAX_PAGE} from '../import/webpage';
+import {readEquipment,mergeCatalogue,locate,reading,inColumn,type Box,type Proposal} from '../import/equipment';
+import {catalogueFromDatasheet,catalogueFromWeb,pageText,pickAt,redirectTarget,MAX_PAGE} from '../import/webpage';
+import {valueIn} from '../import/vocabulary';
 import {exportCatalogue} from '../export/equipment';
 import type {PageEvidence} from '../store/schema';
 import type {PositionedLine} from '../import/parse';
@@ -14,7 +15,8 @@ import {Fragment} from 'preact';
 import {signal} from '@preact/signals';
 import {TypePicker} from './TypePicker';
 import {applyPick,keepPicked} from '../import/equipment';
-import {GROUPS,allTypes,type EquipmentType,type Pick} from '../engine/equipment-types';
+import {checkAll,withCheck} from '../import/checks';
+import {GROUPS,MAX_LEARNED,allTypes,withLearned,type EquipmentType,type Learned,type Param,type Pick} from '../engine/equipment-types';
 import type {CatalogueRow} from '../engine/loads';
 
 const HEADS:Record<CatalogueKey,string>={brand:'Brand',model:'Model / Part Number',config:'Configuration',ratedKw:'Rated Input Power (kW)',protA:'Protection Device Rating (A)',inA:'In (A)',un:'Un',efficiency:'Efficiency',pf:'Power Factor',source:'Source'};
@@ -30,28 +32,41 @@ const lastPick=signal<Pick>({types:['motor'],on:{}});
 const MARK:Record<CatalogueKey,string>={brand:'Brand',model:'Model',config:'Config',ratedKw:'kW',protA:'Prot. A',inA:'In',un:'Un',efficiency:'η',pf:'PF',source:'Source'};
 
 // The page a row was read from with a box round each value taken from it, so the engineer sees exactly where it came from.
-function PageView({file,p,lines,onClose}:{file:File;p:Proposal;lines:readonly PositionedLine[]|undefined;onClose:()=>void}) {
+// To correct a value, the engineer picks the parameter and clicks the value on the page: the row takes it, and the label
+// printed before it is learned for the next sheet of this equipment type (onTeach says what happened).
+type Map4=(r:[number,number,number,number])=>number[];
+function PageView({file,p,lines,params,onTeach,onClose}:{file:File;p:Proposal;lines:readonly PositionedLine[]|undefined;params:readonly Param[];onTeach:(key:string,picked:{text:string;label:string},box:Omit<Box,'key'>)=>string;onClose:()=>void}) {
  const canvas=useRef<HTMLCanvasElement>(null),wrap=useRef<HTMLDivElement>(null),[marks,setMarks]=useState<{key:CatalogueKey;style:string}[]|null>(null),[error,setError]=useState('');
+ const [map,setMap]=useState<Map4|null>(null),[teach,setTeach]=useState(''),[said,setSaid]=useState('');
  const exact=!!p.boxes?.length;
+ // Boxes are placed in percent of the canvas so they follow it as it scales.
+ const styleOf=(m:Map4,x0:number,x1:number,y:number,h:number)=>{const c=canvas.current;if(!c)return '';const [a=0,b=0,d=0,e=0]=m([x0-1,y-h*0.3,x1+1,y+h*0.95]),pc=(v:number,of:number)=>`${(v/of*100).toFixed(3)}%`;
+  return `left:${pc(Math.min(a,d),c.width)};top:${pc(Math.min(b,e),c.height)};width:${pc(Math.abs(d-a),c.width)};height:${pc(Math.abs(e-b),c.height)}`;};
  useEffect(()=>{
   const c=canvas.current;if(!c)return;let live=true;setMarks(null);setError('');
   const boxes=p.boxes?.length?p.boxes:locate(p.entry,lines??[]);
-  // Rendered at up to twice screen size for sharp text; boxes are placed in percent so they follow the canvas as it scales.
-  renderPage(file,p.page,c,Math.min(2400,Math.round(1000*devicePixelRatio))).then(map=>{if(!live)return;
-   setMarks(boxes.map(b=>{const [x0=0,y0=0,x1=0,y1=0]=map([b.x0-1,b.y-b.h*0.3,b.x1+1,b.y+b.h*0.95]),pc=(v:number,of:number)=>`${(v/of*100).toFixed(3)}%`;
-    return {key:b.key,style:`left:${pc(Math.min(x0,x1),c.width)};top:${pc(Math.min(y0,y1),c.height)};width:${pc(Math.abs(x1-x0),c.width)};height:${pc(Math.abs(y1-y0),c.height)}`};}));
+  // Rendered at up to twice screen size for sharp text.
+  renderPage(file,p.page,c,Math.min(2400,Math.round(1000*devicePixelRatio))).then(m=>{if(!live)return;setMap(()=>m);
+   setMarks(boxes.map(b=>({key:b.key,style:styleOf(m,b.x0,b.x1,b.y,b.h)})));
   },(e:unknown)=>{if(live)setError(message(e,'Could not show the page.'));});
   return ()=>{live=false;};
  },[file,p,lines]);
  // Only the page scrolls to the first box; scrollIntoView would also scroll the dialog and hide its heading.
  useEffect(()=>{const w=wrap.current,m=w?.querySelector<HTMLElement>('.page-mark');if(w&&m)w.scrollTop=m.offsetTop-w.clientHeight/2;},[marks]);
- useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();onClose();}};addEventListener('keydown',key,true);return ()=>removeEventListener('keydown',key,true);},[onClose]);
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();if(teach)setTeach('');else onClose();}};addEventListener('keydown',key,true);return ()=>removeEventListener('keydown',key,true);},[onClose,teach]);
  return <div class="modal-backdrop"><section class="modal schematic-modal page-view" role="dialog" aria-modal="true" aria-label={`Page ${p.page} of the datasheet`}>
   <div class="panel-heading"><div><div class="eyebrow">PAGE {p.page}</div><h2>{p.entry.model||'Row without a model'}</h2>
    <p>{exact?'Each box is where a value in this row was printed.':'This row was read without positions, so every place its values are printed on the page is boxed. Some boxes may belong to other rows.'}{marks&&!marks.length?' None of its values were found on the page.':''}</p>
-   {p.note&&<p class="page-note">{p.note}</p>}</div><button class="icon-button" aria-label="Close page" onClick={onClose}><X size={18}/></button></div>
+   {p.note&&<p class="page-note">{p.note}</p>}{p.doubt&&<p class="page-note">{p.doubt.why}</p>}
+   {params.length>0&&!!lines?.length&&<div class="teach-bar"><label class="field"><span>Correct a value</span><select value={teach} onChange={e=>{setTeach(e.currentTarget.value);setSaid('');}}>
+     <option value="">Pick a parameter…</option>{params.map(x=><option key={x.key} value={x.key}>{x.label}{x.unit?` (${x.unit})`:''}</option>)}</select></label>
+    <span class={said?'page-note':'muted'} role="status">{teach?'Now click its value on the page (Esc to stop).':said||'Pick a parameter, then click its value on the page. The label printed before it is remembered for the next sheet of this type.'}</span></div>}</div>
+   <button class="icon-button" aria-label="Close page" onClick={onClose}><X size={18}/></button></div>
   {error&&<p class="sheet-empty">{error}</p>}
-  <div class="page-scroll" ref={wrap}><div class="page-canvas"><canvas ref={canvas}/>{marks?.map((m,k)=><span key={k} class="page-mark" style={m.style}><b>{MARK[m.key]}</b></span>)}</div></div>
+  <div class="page-scroll" ref={wrap}><div class="page-canvas"><canvas ref={canvas}/>{marks?.map((m,k)=><span key={k} class="page-mark" style={m.style}><b>{MARK[m.key]}</b></span>)}
+   {teach&&map&&lines?.flatMap((l,li)=>l.cells.map((c,ci)=>{const y=c.y??l.y??0,h=c.h||8;
+    return <button key={`${li}:${ci}`} type="button" class="page-item" style={styleOf(map,c.x,c.x+(c.w??0),y,h)} aria-label={`Take ${c.text.trim()}`} title={c.text.trim()}
+     onClick={()=>{setSaid(onTeach(teach,pickAt(l,ci),{x0:c.x,x1:c.x+(c.w??0),y,h}));setTeach('');}}/>;}))}</div></div>
  </section></div>;
 }
 
@@ -66,16 +81,30 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
  const extras=[...new Map(read.types.flatMap(t=>t.params.filter(x=>!x.feeds).map(x=>[x.key,x] as const))).values()];
  const hasExtra=(p:Proposal,key:string)=>!!typeOf(p)?.params.some(x=>x.key===key&&!x.feeds);
  const missing=(p:Proposal,feeds:string,key='')=>{const x=typeOf(p)?.params.find(q=>q.required&&(key?q.key===key:q.feeds===feeds));return !!x&&!(x.feeds?p.entry[x.feeds]:p.entry.extra?.[x.key]??'').trim();};
- const unchecked=picked.reduce((a,p)=>a+p.unverified.filter(k=>takes(p,k)).length,0),guesses=picked.filter(p=>p.typeGuess).length;
+ const unchecked=picked.reduce((a,p)=>a+p.unverified.filter(k=>takes(p,k)).length,0),guesses=picked.filter(p=>p.typeGuess).length,doubts=picked.filter(p=>p.doubt).length;
  // A catalogue can give thousands of rows: show them a page at a time so typing stays quick.
- // "Only rows to check" lists the rows with a red value (a model missing, a value not on its page, values that do not add up)
- // or a type that two picked types fit equally.
- const list=rows.map((p,i)=>({p,i})).filter(x=>!only||x.p.unverified.length||x.p.typeGuess);
+ // "Only rows to check" lists the rows with a red value (a model missing, a value not on its page, values that do not add up),
+ // an amber one (values that do not work out with each other) or a type that two picked types fit equally.
+ const list=rows.map((p,i)=>({p,i})).filter(x=>!only||x.p.unverified.length||x.p.typeGuess||x.p.doubt);
  const PAGE=200,last=Math.min(from+PAGE,list.length),all=rows.length>0&&picked.length===rows.length;
- // A value the engineer typed is theirs: it is no longer flagged as unchecked.
- const edit=(i:number,k:CatalogueKey,v:string)=>setRead({...read,proposals:rows.map((p,j)=>j===i?{...p,entry:{...p.entry,[k]:clip(v)},unverified:p.unverified.filter(x=>x!==k)}:p)});
- const editExtra=(i:number,key:string,v:string)=>setRead({...read,proposals:rows.map((p,j)=>j===i?{...p,entry:{...p.entry,extra:{...p.entry.extra,[key]:clip(v)}}}:p)});
- const retype=(i:number,id:string)=>setRead({...read,proposals:rows.map((p,j)=>j===i?{...p,entry:{...p.entry,type:id},typeGuess:false}:p)});
+ // A value the engineer typed is theirs: it is no longer flagged as unchecked. Its row's sums are worked out again.
+ const change=(i:number,f:(p:Proposal)=>Proposal)=>setRead({...read,proposals:rows.map((p,j)=>{if(j!==i)return p;const n=f(p);return withCheck(n,typeOf(n));})});
+ const edit=(i:number,k:CatalogueKey,v:string)=>change(i,p=>({...p,entry:{...p.entry,[k]:clip(v)},unverified:p.unverified.filter(x=>x!==k)}));
+ const editExtra=(i:number,key:string,v:string)=>change(i,p=>({...p,entry:{...p.entry,extra:{...p.entry.extra,[key]:clip(v)}}}));
+ const retype=(i:number,id:string)=>change(i,p=>({...p,entry:{...p.entry,type:id},typeGuess:false}));
+ // A value the engineer clicked on the page: the row takes it, and the label printed before it is learned for this type.
+ function teach(i:number,key:string,picked:{text:string;label:string},box:Omit<Box,'key'>):string {
+  const p=rows[i],t=p&&typeOf(p),x=t?.params.find(q=>q.key===key);if(!p||!t||!x)return '';
+  const v=valueIn(reading(x),picked.text,picked.label),value=v?x.feeds?inColumn(x.feeds,v.value):clip(v.value):'';
+  if(!value)return `"${picked.text}" is not a ${x.label}${x.unit?` in ${x.unit}`:''}. Click the value itself.`;
+  change(i,q=>{const n:Proposal={...q,entry:x.feeds?{...q.entry,[x.feeds]:value}:{...q.entry,extra:{...q.entry.extra,[key]:value}},
+   unverified:q.unverified.filter(k=>k!==x.feeds),evidence:`${picked.label||x.label}: ${picked.text} (set on the page) · ${q.evidence}`.slice(0,300)};
+   if(x.feeds&&q.boxes)n.boxes=[...q.boxes.filter(b=>b.key!==x.feeds),{key:x.feeds,...box}];return n;});
+  if(!picked.label)return `${x.label} set to ${value}. No label is printed before it, so nothing was learned.`;
+  const learned=project.value.loads.learned,plain=(s:string)=>s.replace(/\s+/g,'').toLowerCase(),same=(l:Learned)=>l.type===t.id&&l.key===key&&plain(l.label)===plain(picked.label);
+  if(!learned.some(same))setLoads({learned:[...learned,{type:t.id,key,label:picked.label}].slice(-MAX_LEARNED)});
+  return `${x.label} set to ${value}. "${picked.label}" will be read as ${x.label} on the next ${t.name.trim()} sheet.`;
+ }
  function add(){
   const brand=clip(read.brand.trim());if(!brand){notify('Enter the brand for these entries.');return;}
   // The catalogue is looked up by brand, model and configuration: a row without a model can never be picked, and two
@@ -88,26 +117,26 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
   catch(e){notify(message(e,'Could not add the entries.'));}
  }
  return <div class="modal-backdrop"><section class="modal schematic-modal" role="dialog" aria-modal="true" aria-label="Review datasheet entries">
-  <div class="panel-heading"><div><div class="eyebrow">READ DATASHEET</div><h2>{read.file}</h2><p>{read.pages.length} page{read.pages.length===1?'':'s'} read{read.ocr?`, ${read.ocr} by OCR (check numbers carefully)`:''}. Tick the rows to add and fix anything misread. Red values were not found on the page they came from, or a row's kW, In, efficiency and power factor do not work out to its voltage.{read.pdf?' Click a page number to see where each value was printed.':''}</p></div><button class="icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></div>
+  <div class="panel-heading"><div><div class="eyebrow">READ DATASHEET</div><h2>{read.file}</h2><p>{read.pages.length} page{read.pages.length===1?'':'s'} read{read.ocr?`, ${read.ocr} by OCR (check numbers carefully)`:''}. Tick the rows to add and fix anything misread. Red values were not found on the page they came from, or a row's kW, In, efficiency and power factor do not work out to its voltage. Amber values do not add up with the row's other values (a transformer's kVA, voltage and current, a motor's kW, current and power factor, efficiency and losses); point at one for the sum.{read.pdf?' Click a page number to see where each value was printed.':''}</p></div><button class="icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></div>
   <div class="import-source"><label class="field"><span>Brand</span><input value={read.brand} maxLength={MAX_CELL} placeholder="Manufacturer name" onInput={e=>setRead({...read,brand:e.currentTarget.value})}/></label></div>
   <div class="schematic-table"><table><thead><tr><th><input type="checkbox" checked={all} aria-label="Add all rows" onChange={()=>setRead({...read,proposals:rows.map(x=>({...x,include:!all}))})}/></th><th>{HEADS.model}</th>{read.types.length>0&&<th>Equipment type</th>}
     {cols.map(k=><th key={k}>{HEADS[k]}</th>)}{extras.map(x=><th key={x.key}>{x.label}{x.unit?` (${x.unit})`:''}</th>)}<th>Page</th><th>Read from</th></tr></thead>
    <tbody>{list.slice(from,last).map(({p,i})=>{const t=typeOf(p);return <tr key={i} class={p.include?'':'off'}><td><input type="checkbox" checked={p.include} aria-label={`Add row ${i+1}`} onChange={e=>{const on=e.currentTarget.checked;setRead({...read,proposals:rows.map((x,j)=>j===i?{...x,include:on}:x)});}}/></td>
-    {(['model',...cols] as CatalogueKey[]).map(k=>{const off=!takes(p,k),bad=!off&&p.unverified.includes(k),need=!off&&missing(p,k);
-     return <Fragment key={k}><td class={`cell ${bad||need?'bad':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not take this value, so it is left out.`:bad?p.note&&(k==='inA'||k==='un')?p.note:`Not found on page ${p.page||'?'}. Check the PDF.`:need?'Required for this equipment type, but not read. Type it from the datasheet.':undefined}>
+    {(['model',...cols] as CatalogueKey[]).map(k=>{const off=!takes(p,k),bad=!off&&p.unverified.includes(k),need=!off&&missing(p,k),fed=t?.params.find(x=>x.feeds===k)?.key,doubt=!off&&!!fed&&!!p.doubt?.keys.includes(fed);
+     return <Fragment key={k}><td class={`cell ${bad||need?'bad':doubt?'doubt':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not take this value, so it is left out.`:bad?p.note&&(k==='inA'||k==='un')?p.note:`Not found on page ${p.page||'?'}. Check the PDF.`:need?'Required for this equipment type, but not read. Type it from the datasheet.':doubt?p.doubt!.why:undefined}>
       <input value={off?'':p.entry[k]} disabled={off} aria-label={`${HEADS[k]}, row ${i+1}`} maxLength={MAX_CELL} onInput={e=>edit(i,k,e.currentTarget.value)}/></td>
       {k==='model'&&read.types.length>0&&<td class={`cell ${p.typeGuess?'bad':''}`} title={p.typeGuess?'Two of the picked types fit this row equally well. Check its type.':undefined}>
        <select value={p.entry.type??''} aria-label={`Equipment type, row ${i+1}`} onChange={e=>retype(i,e.currentTarget.value)}>{read.types.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></td>}</Fragment>;})}
-    {extras.map(x=>{const off=!hasExtra(p,x.key),need=!off&&missing(p,'',x.key);return <td key={x.key} class={`cell ${need?'bad':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not have this parameter.`:need?'Required for this equipment type. Type it from the datasheet.':undefined}>
+    {extras.map(x=>{const off=!hasExtra(p,x.key),need=!off&&missing(p,'',x.key),doubt=!off&&!!p.doubt?.keys.includes(x.key);return <td key={x.key} class={`cell ${need?'bad':doubt?'doubt':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not have this parameter.`:need?'Required for this equipment type. Type it from the datasheet.':doubt?p.doubt!.why:undefined}>
      <input value={off?'':p.entry.extra?.[x.key]??''} disabled={off} aria-label={`${x.label}, row ${i+1}`} maxLength={MAX_CELL} onInput={e=>editExtra(i,x.key,e.currentTarget.value)}/></td>;})}
-    <td>{p.page&&read.pdf?<button class="text-button" title="Show where these values are on the page" onClick={()=>setView(i)}>p. {p.page}</button>:p.page||'—'}</td><td class="evidence" title={p.note?`${p.note} ${p.evidence}`:p.evidence}>{p.note?`⚠ ${p.note} `:''}{p.evidence}</td></tr>;})}</tbody></table>
+    <td>{p.page&&read.pdf?<button class="text-button" title="Show where these values are on the page" onClick={()=>setView(i)}>p. {p.page}</button>:p.page||'—'}</td><td class="evidence" title={[p.note,p.doubt?.why,p.evidence].filter(Boolean).join(' ')}>{p.note?`⚠ ${p.note} `:''}{p.doubt?`⚠ ${p.doubt.why} `:''}{p.evidence}</td></tr>;})}</tbody></table>
    {!rows.length&&<p class="sheet-empty">No values found for the picked equipment types' parameters. Check the types and parameters picked, or add a row and type the values from the PDF.</p>}</div>
-  <div class="modal-actions"><span class="muted">{picked.length} to add{unchecked?` · ${unchecked} values to check`:''}{guesses?` · ${guesses} types to check`:''}</span>
+  <div class="modal-actions"><span class="muted">{picked.length} to add{unchecked?` · ${unchecked} values to check`:''}{guesses?` · ${guesses} types to check`:''}{doubts?` · ${doubts} row${doubts===1?'':'s'} not adding up`:''}</span>
    <label class="check-inline muted"><input type="checkbox" checked={only} onChange={e=>{setOnly(e.currentTarget.checked);setFrom(0);}}/>Only rows to check</label>
    {list.length>PAGE&&<span class="pager"><button class="button ghost small" disabled={!from} onClick={()=>setFrom(Math.max(0,from-PAGE))}>Previous</button><span class="muted">Rows {from+1}–{last} of {list.length}</span><button class="button ghost small" disabled={last>=list.length} onClick={()=>setFrom(from+PAGE)}>Next</button></span>}
    <button class="button secondary small" onClick={()=>setRead({...read,proposals:[...rows,{entry:{...emptyEntry(),source:clip(`${read.file} (typed)`),...read.types[0]?{type:read.types[0].id}:{}},page:0,evidence:'',unverified:[],include:true}]})}><Plus size={14}/>Add row</button>
    <button class="button secondary small" onClick={onClose}>Cancel</button><button class="button primary small" disabled={!picked.length||!read.brand.trim()} onClick={add}><Check size={15}/>Add to catalogue</button></div>
- </section>{view!==null&&read.pdf&&rows[view]&&<PageView file={read.pdf} p={rows[view]} lines={read.layout?.get(rows[view].page)} onClose={()=>setView(null)}/>}</div>;
+ </section>{view!==null&&read.pdf&&rows[view]&&<PageView file={read.pdf} p={rows[view]} lines={read.layout?.get(rows[view].page)} params={typeOf(rows[view])?.params??[]} onTeach={(key,picked,box)=>teach(view,key,picked,box)} onClose={()=>setView(null)}/>}</div>;
 }
 
 // A long catalogue is read only where the engineer points: they look through the pages and pick the tables or datasheets
@@ -162,7 +191,7 @@ export function Catalogue() {
  const cat=project.value.loads.catalogue,book=useRef<HTMLInputElement>(null),pdf=useRef<HTMLInputElement>(null),stop=useRef<AbortController|null>(null);
  const [busy,setBusy]=useState(''),[read,setRead]=useState<Read|null>(null),[brand,setBrand]=useState(''),[q,setQ]=useState(''),[pasting,setPasting]=useState(false);
  const [choosing,setChoosing]=useState<'pdf'|'paste'|null>(null),chosen=useRef<EquipmentType[]>([]),[picking,setPicking]=useState<{file:File;total:number}|null>(null);
- const types=allTypes(project.value.loads.types),typeName=(id?:string)=>types.find(t=>t.id===id)?.name.trim();
+ const learned=project.value.loads.learned.length,types=allTypes(project.value.loads.types),typeName=(id?:string)=>types.find(t=>t.id===id)?.name.trim();
  // An entry's catalogue-only values, named by its type's parameters.
  const others=(e:CatalogueRow)=>{const t=types.find(x=>x.id===e.type);return Object.entries(e.extra??{}).map(([k,v])=>{const p=t?.params.find(x=>x.key===k);return `${p?.label||k}: ${v}${p?.unit?` ${p.unit}`:''}`;}).join('; ');};
  const brands=unique(cat.map(c=>c.brand)),find=q.trim().toLowerCase();
@@ -170,7 +199,7 @@ export function Catalogue() {
  const set=(i:number,k:CatalogueKey,v:string)=>{const next=[...cat];next[i]={...next[i]!,[k]:clip(v)};setLoads({catalogue:next},`cat:${i}:${k}`);};
  const setType=(i:number,id:string)=>{const next=[...cat],e={...next[i]!};if(id)e.type=id;else delete e.type;next[i]=e;setLoads({catalogue:next});};
  // The picker comes first; then the file chooser or the paste box, with the types picked.
- function chose(t:EquipmentType[]){chosen.current=t;const c=choosing;setChoosing(null);if(c==='pdf')pdf.current?.click();else setPasting(true);}
+ function chose(t:EquipmentType[]){chosen.current=withLearned(t,project.value.loads.learned);const c=choosing;setChoosing(null);if(c==='pdf')pdf.current?.click();else setPasting(true);}
  async function openBook(f:File){
   setBusy('Reading the catalogue…');
   try{const r=readEquipment(await readTables(f),f.name);if(!r.catalogue.length)throw Error('No catalogue rows found. The sheet needs a Model / Part Number column; sheets named "Brand (Name)" take the brand from their name.');
@@ -179,7 +208,7 @@ export function Catalogue() {
  }
  function fromWeb(text:string,source:string){
   const r=catalogueFromWeb(text,source,chosen.current);setPasting(false);
-  setRead({file:source,pages:[{page:1,text,mode:'text',confidence:null}],ocr:0,proposals:applyPick(r.proposals,chosen.current),brand:brand||r.brand,types:chosen.current});
+  setRead({file:source,pages:[{page:1,text,mode:'text',confidence:null}],ocr:0,proposals:checkAll(applyPick(r.proposals,chosen.current),chosen.current),brand:brand||r.brand,types:chosen.current});
  }
  // pages: the pages picked; null when the engineer chose to read them all.
  async function openPdf(f:File,pages?:number[]|null){
@@ -191,7 +220,7 @@ export function Catalogue() {
    // A PDF of more than one page: the engineer picks the pages to read first.
    if(/\.pdf$/i.test(f.name)&&pages===undefined){const total=await pageCount(f);if(total>1){setPicking({file:f,total});return;}}
    const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment',pages??undefined),r=catalogueFromDatasheet(doc.pages,f.name,doc.layout,doc.rules,chosen.current);
-   setRead({file:f.name,pages:doc.pages,ocr:doc.pages.filter(p=>p.mode==='ocr').length,proposals:applyPick(r.proposals,chosen.current),brand:brand||r.brand,types:chosen.current,...(/\.pdf$/i.test(f.name)?{pdf:f,layout:doc.layout}:{})});}
+   setRead({file:f.name,pages:doc.pages,ocr:doc.pages.filter(p=>p.mode==='ocr').length,proposals:checkAll(applyPick(r.proposals,chosen.current),chosen.current),brand:brand||r.brand,types:chosen.current,...(/\.pdf$/i.test(f.name)?{pdf:f,layout:doc.layout}:{})});}
   catch(e){notify(message(e,'Could not read the datasheet.'));}finally{setBusy('');stop.current=null;if(pdf.current)pdf.current.value='';}
  }
  return <>
@@ -207,6 +236,7 @@ export function Catalogue() {
     <button class="button secondary small" disabled={!!busy} onClick={()=>setChoosing('pdf')} title="PDF, scanned image or saved web page (.html); text is read on this computer"><ScanText size={15}/>Read datasheet</button>
     <button class="button secondary small" disabled={!!busy} onClick={()=>setChoosing('paste')} title="Copy a vendor's product page and paste it here"><ClipboardPaste size={15}/>Paste web page</button>
     <button class="button secondary small" onClick={()=>{setLoads({catalogue:[...cat,{...emptyEntry(),brand}]});setQ('');}}><Plus size={15}/>Add entry</button>
+    {learned>0&&<button class="button ghost small" title="Labels learned when you corrected a value by clicking it on a datasheet page. Undo brings them back." onClick={()=>{setLoads({learned:[]});notify(`Forgot ${learned} learned label${learned===1?'':'s'}.`);}}>Forget {learned} learned label{learned===1?'':'s'}</button>}
     <button class="button secondary small" disabled={!cat.length} onClick={()=>void exportCatalogue(cat,project.value.name).catch((e:unknown)=>notify(message(e,'Export failed.')))}><FileSpreadsheet size={15}/>Export catalogue</button></div></div>
   <div class="toolbar">{brands.length>1&&<label class="panel-pick"><span class="visually-hidden">Brand</span><select value={brand} onChange={e=>setBrand(e.currentTarget.value)}><option value="">All brands ({cat.length})</option>{brands.map(b=><option key={b} value={b}>{b} ({cat.filter(c=>sameText(c.brand,b)).length})</option>)}</select></label>}
    <label class="search"><Search size={14}/><input value={q} placeholder="Find model, configuration…" aria-label="Find catalogue entries" onInput={e=>setQ(e.currentTarget.value)}/></label>

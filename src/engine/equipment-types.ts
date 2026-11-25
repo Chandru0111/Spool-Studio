@@ -5,11 +5,13 @@ import {FROM_CATALOGUE} from './loads';
 // parameter either fills one of the load list's catalogue columns (feeds) or stays with the catalogue entry only, so the
 // load list export never changes. Brand, model and configuration are always read: they identify the entry.
 export type Feed=typeof FROM_CATALOGUE[number]|'';
-export type Param={key:string;label:string;unit:string;feeds:Feed;required:boolean};
+// labels: how makers print the parameter, as the engineer taught them by clicking its value on a page in the review
+// (saved with the project, see withLearned); a printed label equal to one of them names the parameter before any other.
+export type Param={key:string;label:string;unit:string;feeds:Feed;required:boolean;labels?:readonly string[]};
 export type EquipmentType={id:string;name:string;group:number;builtIn:boolean;params:Param[]};
 export const GROUPS=['Loads','Distribution','Protection and switching','Supply','Your equipment types'] as const;
 export const CUSTOM_GROUP=4;
-export const MAX_TYPES=50,MAX_PARAMS=40;
+export const MAX_TYPES=50,MAX_PARAMS=40,MAX_LEARNED=500;
 
 const FEED:Record<string,Feed>={kw:'ratedKw',prot:'protA',in:'inA',un:'un',eff:'efficiency',pf:'pf'};
 const slug=(s:string)=>s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
@@ -36,6 +38,9 @@ const LIST:[string,string,number,string][]=[
  ['isolator','Isolator / switch-disconnector',2,'Rated current Ie (AC-23)|A|prot|1;Rated voltage Ue|V|un|1;Thermal current Ith|A||0;Poles|||0;Short-time withstand Icw|kA||0;Making capacity Icm|kA||0;Mounting|||0'],
  ['contactor','Contactor / overload relay',2,'Rated current Ie (AC-3)|A||1;Motor power AC-3|kW||0;Rated voltage Ue|V|un|0;Coil voltage|V||0;Poles|||0;Overload range|A||0;Trip class|||0'],
  ['generator','Generator',3,"Prime power|kW|kw|1;Rated voltage|V|un|1;Rated current|A|in|1;Power factor||pf|0;Output breaker|A|prot|0;Standby power|kW||0;Rated output|kVA||0;Frequency|Hz||0;Subtransient reactance X''d|%||0;Fuel use|l/h||0"],
+ // Named by its HV and LV sides, not primary and secondary: on a step-up transformer the primary is the LV side. The LV side
+ // is the one an LV board connects to, so it fills Un and In.
+ ['hv-transformer','HV transformer (HV/LV, step-up or step-down)',3,'Rated power|kVA||1;HV voltage|kV||1;LV voltage|V|un|1;LV current|A|in|1;HV current|A||0;Frequency|Hz||0;Phases|||0;Vector group|||0;Impedance (uk)|%||0;No-load losses|kW||0;Load losses|kW||0;Efficiency|%|eff|0;Cooling|||0;HV taps|||0;Insulation class|||0;Temperature rise (oil / winding)|K||0;Winding material|||0;Standard|||0;Weight|kg||0;Length|mm||0;Width|mm||0;Height|mm||0'],
  ['mv-transformer','MV/LV transformer',3,'Rated power|kVA||1;Secondary voltage|V|un|1;Secondary current|A|in|1;Primary voltage|kV||1;Impedance uk|%||0;Efficiency|%|eff|0;No-load losses|W||0;Load losses|W||0;Vector group|||0;Cooling|||0'],
 ];
 export const BUILT_IN:readonly EquipmentType[]=LIST.map(([id,name,group,spec])=>({id,name,group,builtIn:true,
@@ -51,5 +56,10 @@ export function pickedTypes(pick:Pick,own:readonly EquipmentType[]):EquipmentTyp
  const all=allTypes(own);
  return pick.types.flatMap(id=>{const t=all.find(x=>x.id===id);if(!t)return [];const on=pick.on[t.id]??defaultOn(t);return [{...t,params:t.params.filter(p=>on.includes(p.key))}];});
 }
+// A label the engineer taught: on sheets read as this equipment type, a value printed after it is this parameter's.
+export type Learned={type:string;key:string;label:string};
+// The picked types with the labels taught for their parameters.
+export const withLearned=(types:readonly EquipmentType[],learned:readonly Learned[]):EquipmentType[]=>types.map(t=>({...t,params:t.params.map(p=>{
+ const labels=learned.filter(l=>l.type===t.id&&l.key===p.key).map(l=>l.label);return labels.length?{...p,labels}:p;})}));
 // The load list columns two or more of a type's parameters would fill: each column takes one value.
 export const doubleFeeds=(params:readonly Param[]):Feed[]=>{const seen=new Set<Feed>(),twice=new Set<Feed>();for(const p of params)if(p.feeds){if(seen.has(p.feeds))twice.add(p.feeds);seen.add(p.feeds);}return [...twice];};

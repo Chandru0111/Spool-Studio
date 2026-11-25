@@ -1,11 +1,12 @@
 import {clip} from '../engine/sheet';
-import {emptyEntry,type CatalogueKey,type CatalogueRow} from '../engine/loads';
+import {FROM_CATALOGUE,emptyEntry,type CatalogueKey,type CatalogueRow} from '../engine/loads';
 import type {PageEvidence} from '../store/schema';
-import {asFraction,catalogueFromPages,dot,group,inColumn,reading,verify,type Proposal} from './equipment';
+import {asFraction,catalogueFromPages,dot,group,inColumn,reading,verify,type Box,type Proposal} from './equipment';
 import type {PositionedLine,Rule} from './parse';
 import {catalogueFromTables} from './rating-table';
 import type {EquipmentType,Param} from '../engine/equipment-types';
-import {SHAPES,conceptOf,loadsIn,nameScore,unitIn,unitNames,valueIn} from './vocabulary';
+import {SHAPES,conceptOf,loadsIn,nameScore,unitIn,unitNames,unitOf,valueIn} from './vocabulary';
+import {checkRow} from './checks';
 
 // Vendor product pages. A browser will not let one website read another, and vendors block bots, so the page comes in through
 // the user's own browser: copied and pasted, or saved as .html. The HTML is only turned into text here, never shown or run.
@@ -97,7 +98,8 @@ function entryOf(pairs:readonly Pair[],source:string):{entry:CatalogueRow;eviden
  for(const p of pairs){if(p.load==='part')continue;const b=best.get(p.field);if(!b||full(p)&&!full(b)||full(p)===full(b)&&p.rank<b.rank)best.set(p.field,p);}
  const e=emptyEntry(),get=(f:Field)=>best.get(f)?.value??'',evidence=new Set<string>();let converted=false;
  e.model=clip(get('model').split(/\s{2,}|\s\|\s/)[0]!.trim());
- const power=best.get('ratedKw')??best.get('hp');
+ // A power printed in kVA or kvar is not the kW the load list needs.
+ const power=[best.get('ratedKw'),best.get('hp')].find(p=>p&&valueIn({label:'Rated power',unit:'kW'},p.value,p.label));
  if(power){
   // The unit written with the value wins over the column heading ("Hp" column holding "5.5 kW").
   const v=power.value,unit=/\bkw\b/i.test(v)?'kw':/\bhp\b/i.test(v)?'hp':/\d\s*w\b/i.test(v)?'w':power.field==='hp'||/\bhp\b/i.test(power.label)?'hp':'kw';
@@ -136,7 +138,8 @@ function tables(lines:readonly string[]):{rows:Pair[][];used:Set<number>} {
 
 // Every label printed with a value: table cells side by side (two or more pairs per row), "Label: value", or a label line
 // with its value on the next line.
-type Raw={label:string;value:string;line:string;load?:Load};
+// section: the heading the label is printed under ("HV side", "Losses"), which the label's words are read with.
+type Raw={label:string;value:string;line:string;load?:Load;section?:string};
 // The value a label gives at full load. A label naming one load point ("Efficiency at 3/4 load", "cos φ FL") says which
 // load its value is at; one naming several ("Efficiency 100 / 75 / 50 %") gives a value for each, and only the one at full
 // load is taken.
@@ -154,12 +157,17 @@ function looseOf(line:string):{label:string;value:string}|null {
 }
 // loose: also lines of running text (looseOf), for reading parameters by name.
 function candidates(lines:readonly string[],skip:ReadonlySet<number>,loose=false):Raw[] {
- const out:Raw[]=[],point=(c:string)=>c.trim().length<=12&&loadsIn(c).length===1;
+ const all:Raw[]=[],point=(c:string)=>c.trim().length<=12&&loadsIn(c).length===1;
+ // A heading on a line of its own over label/value rows ("HV side", "Losses", "Electrical data"): a few words, no figures,
+ // no colon. The rows under it, to the next heading, are read with it, as an engineer reads a sectioned sheet.
+ let section='';const out={push:(...r:Raw[])=>all.push(...r.map(x=>section?{...x,section}:x))};
  // A row of load points ("Load  100 %  75 %  50 %", "4/4  3/4  2/4") heads the rows of values under it: a row takes its
  // value from under full load, and gives none when no column is at full load.
  let points:number[]|null=null;
  lines.forEach((line,i)=>{
   if(skip.has(i))return;
+  const one=line.trim();
+  if(!line.includes('\t')&&lines[i+1]?.includes('\t')&&/\p{L}/u.test(one)&&!/\d/.test(one)&&one.split(/\s+/).length<=6&&!/[.:]$/.test(one)&&!FIELDS.has(label(one))){section=one;return;}
   const cells=line.split('\t'),tail=cells[0]&&!point(cells[0])?cells.slice(1):cells;
   if(tail.length>=2&&tail.every(point)){points=tail.map(c=>loadsIn(c)[0]!);return;}
   if(points&&cells.length===points.length+1){const j=points.indexOf(1);out.push({label:cells[0]!,value:j<0?'':cells[j+1]!,line,load:j<0?'part':'full'});return;}
@@ -177,7 +185,7 @@ function candidates(lines:readonly string[],skip:ReadonlySet<number>,loose=false
   const next=lines[i+1];if(next!==undefined&&!next.includes('\t')&&!skip.has(i+1)&&FIELDS.has(label(line))){out.push({label:line,value:next,line:`${line} ${next}`});return;}
   const l=loose?looseOf(line):null;if(l)out.push({label:l.label,...atLoad(l.label,[l.value]),line});
  });
- return out;
+ return all;
 }
 const pairsOf=(raw:readonly Raw[]):Pair[]=>raw.flatMap(r=>{const p=pairOf(r.label,r.value,r.line);return p?[r.load?{...p,load:r.load}:p]:[];});
 
@@ -185,11 +193,12 @@ const pairsOf=(raw:readonly Raw[]):Pair[]=>raw.flatMap(r=>{const p=pairOf(r.labe
 // that names it best (nameScore: its words, the vocabulary's words for its quantity, its symbol, its unit, its codes'
 // shape), and each printed value goes to one parameter, best match first, so "Input power" and "Output power" each find
 // their own. A value given at full load beats one that does not say; one at part load is never taken. Two labels naming a
-// parameter equally with different values give it none. Values are read in the unit of the load list column the
+// parameter equally with different values give it none, but are kept as ties for the row's sums to settle (withTypes). Values are read in the unit of the load list column the
 // parameter fills (W, kW and hp all as kW), else in its own. With no label, a code of the parameter's fixed shape printed
 // only once (IP55, IE3), or the supply frequency the sheet prints, is the product's.
-type Got={value:string;was?:string;printed:string;label:string};
-function paramsOf(text:string,params:readonly Param[]):Map<string,Got> {
+// why: how a value was chosen from several printed for its parameter.
+type Got={value:string;was?:string;printed:string;label:string;why?:string};
+function paramsOf(text:string,params:readonly Param[]):{got:Map<string,Got>;ties:Map<string,Got[]>} {
  // A page too long for its comparison tables still has its labels.
  const lines=text.split('\n'),used=(()=>{try{return tables(lines).used;}catch{return new Set<number>();}})();
  const raw=candidates(lines,used,true).filter(r=>r.value.trim());
@@ -197,14 +206,15 @@ function paramsOf(text:string,params:readonly Param[]):Map<string,Got> {
  const at=(p:Param,r:Raw)=>{const want=loadsIn(p.label);if(want.length!==1)return r.load!=='part';const got=loadsIn(r.label);return got.length===1&&got[0]===want[0];};
  const fits=params.flatMap(p=>p.label.trim()?raw.flatMap((r,i)=>{
   if(!at(p,r))return [];
-  const s=nameScore(p,r.label,r.label,r.value),v=s>0?valueIn(reading(p),r.value,r.label):null;
+  const s=nameScore(p,r.label,r.section?`${r.section}\n${r.label}`:r.label,r.value),v=s>0?valueIn(reading(p),r.value,r.label):null;
   return v&&(!p.feeds||inColumn(p.feeds,v.value))?[{p,i,s:s+(r.load==='full'?0.5:0),v,r}]:[];
  }):[]).sort((a,b)=>b.s-a.s);
- const got=new Map<string,Got>(),taken=new Set<number>(),settled=new Set<string>();
+ const got=new Map<string,Got>(),ties=new Map<string,Got[]>(),taken=new Set<number>(),settled=new Set<string>();
  for(const f of fits){
   if(settled.has(f.p.key)||taken.has(f.i))continue;
   settled.add(f.p.key);
-  if(fits.some(x=>x!==f&&x.p===f.p&&x.s===f.s&&!taken.has(x.i)&&x.v.value!==f.v.value))continue;
+  const rivals=fits.filter((x,j)=>x.p===f.p&&x.s===f.s&&!taken.has(x.i)&&fits.findIndex(y=>y.p===f.p&&y.s===f.s&&y.v.value===x.v.value)===j);
+  if(rivals.length>1){ties.set(f.p.key,rivals.map(x=>({...x.v,printed:x.r.value,label:x.r.label})));continue;}
   taken.add(f.i);got.set(f.p.key,{...f.v,printed:f.r.value,label:f.r.label});
  }
  for(const p of params){
@@ -218,7 +228,7 @@ function paramsOf(text:string,params:readonly Param[]):Map<string,Got> {
    if(only.length===1){got.set(p.key,{value:only[0]!,printed:only[0]!,label:p.label});continue;}}
   if(concept==='hz'||/^hz$/i.test(p.unit.trim())){const l=lines.find(x=>HZ.test(x));if(l){const v=l.match(HZ)![1]!;got.set(p.key,{value:v,printed:`${v} Hz`,label:p.label});}}
  }
- return got;
+ return {got,ties};
 }
 // The one product a sheet or page is about, read for the equipment types the user picked: each type's ticked parameters
 // are looked for (paramsOf), and the product takes the type whose parameters are found most, required ones counting
@@ -226,27 +236,44 @@ function paramsOf(text:string,params:readonly Param[]):Map<string,Got> {
 // a breaker's "Rated current In" fills Protection Device Rating and a capacitor bank's kvar stays with the entry. With no
 // product found by its model or motor values, two or more of a type's parameters still make one. A page that lists many
 // products is left to its tables.
-function withTypes<T extends {proposals:Proposal[]}>(r:T,text:string,types:readonly EquipmentType[],source:string,page=1):T {
+// place: where a label's value is printed on the page, for the review's page view.
+type Place=(label:string,printed:string,page:number)=>Omit<Box,'key'>|undefined;
+function withTypes<T extends {proposals:Proposal[]}>(r:T,text:string,types:readonly EquipmentType[],source:string,page=1,place?:Place):T {
  const own=r.proposals.filter(p=>p.include);if(!types.length||own.length>1)return r;
- const reads=types.map(t=>{const got=paramsOf(text,t.params);return {t,got,score:t.params.reduce((n,x)=>n+(got.has(x.key)?x.required?2:1:0),0)};});
+ const reads=types.map(t=>{const {got,ties}=paramsOf(text,t.params);return {t,got,ties,score:t.params.reduce((n,x)=>n+(got.has(x.key)?x.required?2:1:0),0)};});
  const top=Math.max(...reads.map(x=>x.score)),best=reads.find(x=>x.score===top)!;
  if(!top)return r;
  let p=own[0];
  if(!p){if(best.got.size<2)return r;p={entry:{...emptyEntry(),source:clip(source)},page,evidence:'',unverified:[],include:true};r.proposals.push(p);}
- const e:CatalogueRow={...p.entry,type:best.t.id},was=e.un,extra:Record<string,string>={},evidence:string[]=[],converted=new Set<CatalogueKey>();
+ const e:CatalogueRow={...p.entry,type:best.t.id},was=e.un,extra:Record<string,string>={},evidence:string[]=[],converted=new Set<CatalogueKey>(),boxes:Box[]=[];
+ // A load list column the type does not fill stays empty: a transformer's kVA is no kW.
+ for(const k of FROM_CATALOGUE)if(!best.t.params.some(x=>x.feeds===k))e[k]='';
+ // Two labels naming a parameter equally, with different values: the one value that adds up with the row's other values
+ // (checks.ts) is taken, as an engineer would; with none or several, the parameter stays empty.
+ const got=new Map(best.got),fill=(g:ReadonlyMap<string,Got>):CatalogueRow=>{
+  const x:CatalogueRow={...e,extra:{}};for(const q of best.t.params){const v=g.get(q.key);if(q.feeds)x[q.feeds]=v?inColumn(q.feeds,v.value):'';else if(v)x.extra![q.key]=v.value;}return x;};
+ for(const [key,options] of best.ties){
+  if(got.has(key))continue;
+  const fit=options.filter(o=>{const c=checkRow(fill(new Map([...got,[key,o]])),best.t);return c.held.includes(key)&&!c.keys.includes(key);});
+  if(fit.length===1)got.set(key,{...fit[0]!,why:`of ${options.length} values printed for it, the one that adds up`});
+ }
  for(const x of best.t.params){
-  const g=best.got.get(x.key);
-  if(x.feeds){e[x.feeds]=g?inColumn(x.feeds,g.value):'';if(g?.was)converted.add(x.feeds);}
+  const g=got.get(x.key);
+  if(x.feeds){e[x.feeds]=g?inColumn(x.feeds,g.value):'';if(g?.was)converted.add(x.feeds);const at=g&&e[x.feeds]?place?.(g.label,g.printed,p.page):undefined;if(at)boxes.push({key:x.feeds,...at});}
   else if(g)extra[x.key]=clip(g.value);
   // A converted value shows what was printed, so the engineer can check the conversion.
-  if(g)evidence.push(g.was?`${g.label}: ${g.was} = ${g.value} ${reading(x).unit}`:`${g.label}: ${g.printed}`);
+  if(g)evidence.push(`${g.was?`${g.label}: ${g.was} = ${g.value} ${reading(x).unit}`:`${g.label}: ${g.printed}`}${g.why?` (${g.why})`:''}`);
  }
  if(e.un&&e.un!==was)e.config=clip([e.un,...e.config.split(', ').filter(c=>c&&c!==was)].join(', '));
  if(Object.keys(extra).length)e.extra=extra;else delete e.extra;
  const named=e.model?text.split('\n').find(l=>l.includes(e.model))?.replace(/\t/g,' ').trim():'';
  p.entry=e;p.evidence=[named,...evidence].filter(Boolean).join(' · ').slice(0,300);
- p.unverified=[...new Set([...verify(e,[named,...evidence].join('\n')).filter(k=>!converted.has(k)),...(e.model?[]:['model' as const])])];
+ // The configuration is put together from the whole sheet (voltage, phases, frequency), so it is checked against all of it.
+ const sheet=verify(e,text).includes('config');
+ p.unverified=[...new Set([...verify(e,[named,...evidence].join('\n')).filter(k=>!converted.has(k)&&(k!=='config'||sheet)),...(e.model?[]:['model' as const])])];
  p.typeGuess=reads.filter(x=>x.score===top).length>1;
+ const model=e.model?place?.('',e.model,p.page):undefined;if(model)boxes.push({key:'model',...model});
+ if(boxes.length)p.boxes=boxes;else delete p.boxes;
  return r;
 }
 
@@ -275,7 +302,52 @@ export function catalogueFromText(text:string,source:string):{proposals:Proposal
 }
 
 // PDF text items split at ligature glyphs ("E  ffi  ciency"); a lone "|" between pairs is a separator, not a cell.
-const cellsOf=(line:string)=>line.trim().replace(/([A-Za-z])\s+(ffi|ffl|ff|fi|fl)\s+([a-z])/g,'$1$2$3').split(/\s{2,}/).filter(c=>c!=='|');
+// A label whose symbol is set in another font comes apart at it ("Efficiency (", "ɳ", ") at 100% Load"): a bracket opened
+// in a cell and closed within the next three cells makes them one label.
+const depth=(c:string)=>(c.match(/[([]/g)?.length??0)-(c.match(/[)\]]/g)?.length??0);
+function cellsOf(line:string):string[] {
+ const cells=line.trim().replace(/([A-Za-z])\s+(ffi|ffl|ff|fi|fl)\s+([a-z])/g,'$1$2$3').split(/\s{2,}/).filter(c=>c!=='|'),out:string[]=[];
+ for(let i=0;i<cells.length;i++){
+  let d=depth(cells[i]!),j=i;
+  while(d>0&&j<i+3&&j+1<cells.length){j++;d+=depth(cells[j]!);}
+  if(j>i&&d<=0){out.push(cells.slice(i,j+1).join(' '));i=j;}else out.push(cells[i]!);
+ }
+ return out;
+}
+// What the engineer clicked on a page, read as they would: the value, with a unit printed as the next item ("11", "kW"),
+// and the label printed before it on its line. Back from the value past figures and units ("50 %", "[kW]") to the
+// nearest words, joined with the words set close before them (a label the PDF split into several items, or split at a
+// symbol in another font). A value with its label in one item ("Rated power 7.5 kW") gives both. The label is what the
+// review learns for the parameter.
+export function pickAt(line:PositionedLine,i:number):{text:string;label:string} {
+ const cells=line.cells,unit=(t:string)=>!!unitOf(t.replace(/[[\]()]/g,'').trim()),own=cells[i]?.text.trim()??'',next=cells[i+1]?.text.trim()??'';
+ const text=next&&unit(next)?`${own} ${next}`:own;
+ let j=i-1;while(j>=0&&(!/\p{L}/u.test(cells[j]!.text)||unit(cells[j]!.text)))j--;
+ if(j<0){const l=looseOf(own);return l?{text:l.value,label:l.label}:{text,label:''};}
+ let label=cells[j]!.text.trim();
+ for(let k=j-1;k>=0;k--){
+  const a=cells[k]!,b=cells[k+1]!,em=b.h||a.h||10,gap=b.x-(a.x+(a.w??0));
+  if(!a.w||gap>em||!/[\p{L}([]/u.test(a.text))break;
+  label=`${a.text.trim()}${gap>em*0.1?' ':''}${label}`;
+ }
+ return {text,label:label.slice(0,120)};
+}
+// Where a value is printed: the text items holding it (one, or several set together: "11", "kW") on the line that prints
+// its label before it (spaces aside), or with no label, the first item holding it.
+const squash=(s:string)=>s.replace(/\s+/g,'');
+const placeOn=(layout:ReadonlyMap<number,readonly PositionedLine[]>):Place=>(label,printed,page)=>{
+ const v=squash(printed),l=squash(label);if(!v)return undefined;
+ for(const line of layout.get(page)??[]){
+  const cs=line.cells;
+  for(let i=0;i<cs.length;i++){
+   let k=i,got='';while(k<cs.length&&got.length<v.length&&v.startsWith(got+squash(cs[k]!.text)))got+=squash(cs[k++]!.text);
+   if(got!==v&&(l||!squash(cs[i]!.text).includes(v)))continue;
+   if(l&&!squash(cs.slice(0,i).map(c=>c.text).join('')).includes(l))continue;
+   const a=cs[i]!,b=cs[Math.max(i,k-1)]!;return {x0:a.x,x1:b.x+(b.w??0),y:a.y??line.y??0,h:a.h||8};
+  }
+ }
+ return undefined;
+};
 // A PDF is either one product's datasheet or a catalogue of many. Catalogues list their models in rating tables
 // (catalogueFromTables, by column position). One-product sheets are "label    value" rows (Siemens, ABB, WEG): the PDF text keeps
 // two or more spaces between columns, so those become cells and the whole file is read as one product. Prose sheets go through
@@ -297,5 +369,6 @@ export function catalogueFromDatasheet(pages:readonly PageEvidence[],file:string
  const rows=catalogueFromTables(layout,file,rules,types),named=rows.some(r=>!r.unverified.includes('model'));
  if(rows.length>=2&&(named||!single.proposals.some(p=>p.entry.model)))return {proposals:rows,brand:specs.brand};
  const first=pages[0];
- return one&&first?withTypes(single,text,types,`${file}, page ${first.page}${first.mode==='ocr'?' (OCR)':''}`,first.page):single;
+ if(!one||!first)return single;
+ return withTypes(single,text,types,`${file}, page ${first.page}${first.mode==='ocr'?' (OCR)':''}`,first.page,placeOn(layout));
 }

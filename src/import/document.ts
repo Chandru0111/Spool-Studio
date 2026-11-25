@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { checkZip,checkImage } from './guard';
-import { parseTable,parseDelimited,extractCandidates,extractPositionedTable,ocrLines,rulesOf,type PositionedLine,type Rule } from './parse';
+import { parseTable,parseDelimited,extractCandidates,extractPositionedTable,ocrLines,rulesOf,pdfLines,phrases,hasFigureRows,type PositionedLine,type Rule } from './parse';
 import type { Catalogue,PageEvidence } from '../store/schema';
 import { paddleOcr,type Image } from './ocr';
 
@@ -112,16 +112,16 @@ export async function readCatalogue(file:File,onProgress:(p:Progress)=>void,sign
         const sparse:number[]=[];
         for(const [k,number] of list.entries()) {
           check();onProgress({message:`Text reader · page ${number}${pages?` (${k+1} of ${list.length})`:` of ${doc.numPages}`}`,percent:k/list.length*100});
-          const page=await doc.getPage(number);const content=await page.getTextContent();
-          const lines=new Map<number,{x:number;w:number;h:number;y:number;text:string}[]>();
-          for(const item of content.items) if('str' in item&&item.str.trim()) {const y=Math.round((item.transform[5]??0)/3)*3;const line=lines.get(y)??[];line.push({x:item.transform[4]??0,w:item.width||0,h:item.height||0,y:item.transform[5]??0,text:item.str});lines.set(y,line);}
-          const positioned=[...lines.entries()].sort((a,b)=>b[0]-a[0]).map(([,line])=>({cells:line.sort((a,b)=>a.x-b.x)}));
-          const text=positioned.map(line=>line.cells.map(x=>x.text).join('  ')).join('\n');
-          if(number<=3 && /(?:COMMITTEE DRAFT|Draft for Public Comment|INTERNATIONAL STANDARD)/i.test(text)&&/60364/.test(text))throw Error('This is an IEC reference document, not a manufacturer catalogue. Use the separate IEC reference library.');
-          if(text.replace(/\s/g,'').length<60)sparse.push(number);
-          else {result.pages.push({page:number,text,mode:'text',confidence:null});result.layout.set(number,positioned);if(kind==='cables')result.rows.push(...extractPositionedTable(positioned,number,file.name));
+          const page=await doc.getPage(number),{lines:positioned,text:items}=pdfLines((await page.getTextContent()).items);
+          if(number<=3 && /(?:COMMITTEE DRAFT|Draft for Public Comment|INTERNATIONAL STANDARD)/i.test(items)&&/60364/.test(items))throw Error('This is an IEC reference document, not a manufacturer catalogue. Use the separate IEC reference library.');
+          if(items.replace(/\s/g,'').length<60)sparse.push(number);
+          else {
+            if(kind==='cables')result.rows.push(...extractPositionedTable(positioned,number,file.name));
             // Drawn borders mark where a table's columns start and end; only pages with rows of figures are worth the drawing pass.
-            else if(positioned.filter(l=>l.cells.filter(c=>/^\s*-?\d+(?:[.,]\d+)?\s*$/.test(c.text)).length>=3).length>=2){const ops=await page.getOperatorList();result.rules.set(number,rulesOf(ops.fnArray,ops.argsArray,OPS));}}
+            else if(hasFigureRows(positioned)){const ops=await page.getOperatorList();result.rules.set(number,rulesOf(ops.fnArray,ops.argsArray,OPS));}
+            // An equipment datasheet's text is read in phrases, as the page sets them out; a cable catalogue's item by item.
+            result.pages.push({page:number,text:kind==='cables'?items:phrases(positioned,result.rules.get(number)),mode:'text',confidence:null});result.layout.set(number,positioned);
+          }
           page.cleanup();
         }
         // Pages without a text layer are scans when most of the file is (or there are only a few); in a long typed catalogue they are photos and drawings, not worth minutes of OCR.

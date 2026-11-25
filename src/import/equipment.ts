@@ -203,7 +203,8 @@ export function mergeSizing(existing:readonly SheetRow[],incoming:readonly Sheet
 export type Box={key:CatalogueKey;x0:number;x1:number;y:number;h:number};
 // note: why In and Un are flagged when a row's values do not work out to its voltage.
 // typeGuess: two of the picked equipment types fit the row equally well, so its type is for the engineer to choose.
-export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean;boxes?:Box[];note?:string;typeGuess?:boolean};
+// doubt: the parameters (by key) whose values do not add up with each other, and the sums worked out (checks.ts).
+export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean;boxes?:Box[];note?:string;typeGuess?:boolean;doubt?:{keys:string[];why:string}};
 const takes=(t:EquipmentType)=>new Set(t.params.map(p=>p.feeds).filter(Boolean));
 // Rows read from a catalogue the user said covers these equipment types, each holding only its ticked parameters. Every row
 // takes the type whose load list columns best match the values found on it: a value the type takes counts for it, one it

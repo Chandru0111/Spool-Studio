@@ -1,6 +1,6 @@
 import {INPUT_COLS,MAX_CELL,type SheetRow} from '../engine/sheet';
 import {CATALOGUE_KEYS,DEFAULT_FACTORS,DEFAULT_MARGIN,FROM_CATALOGUE,LOAD_KEYS,type CatalogueKey,type LoadKey} from '../engine/loads';
-import {CUSTOM_GROUP,MAX_PARAMS,MAX_TYPES} from '../engine/equipment-types';
+import {CUSTOM_GROUP,MAX_LEARNED,MAX_PARAMS,MAX_TYPES} from '../engine/equipment-types';
 import { z } from 'zod';
 
 export const Rating = z.object({
@@ -52,11 +52,14 @@ export const CatalogueRowData=cells<CatalogueKey>(CATALOGUE_KEYS).extend({type:z
 // A file can never make one of them built in: group and builtIn are set here, not read.
 const ParamData=z.object({key:z.string().min(1).max(40),label:z.string().max(60),unit:z.string().max(20),feeds:z.enum(['',...FROM_CATALOGUE]),required:z.boolean()});
 export const EquipmentTypeData=z.object({id:z.string().min(1).max(40),name:z.string().max(60),params:z.array(ParamData).max(MAX_PARAMS)}).transform(t=>({...t,group:CUSTOM_GROUP as number,builtIn:false as boolean}));
+// Labels the engineer taught by clicking a value on a datasheet page: on sheets read as that type, the value printed after
+// the label is that parameter's. Saved with the project only.
+const LearnedData=z.object({type:z.string().min(1).max(40),key:z.string().min(1).max(40),label:z.string().min(1).max(120)});
 const factor=z.string().max(20);
 export const LoadPanel=z.object({name:z.string().max(60).default('Panel'),rows:z.array(LoadRowData).max(500).default([]),factors:z.object({C:factor,I:factor,S:factor}).default({...DEFAULT_FACTORS}),margin:factor.default(DEFAULT_MARGIN)});
 export type LoadPanel=z.infer<typeof LoadPanel>;
 // The equipment load list and the brand catalogue it draws on. Projects saved before it existed start with an empty one.
-export const Loads=z.object({panels:z.array(LoadPanel).max(50).default([]),catalogue:z.array(CatalogueRowData).max(5000).default([]),source:z.string().max(300).default(''),types:z.array(EquipmentTypeData).max(MAX_TYPES).default([])}).prefault({});
+export const Loads=z.object({panels:z.array(LoadPanel).max(50).default([]),catalogue:z.array(CatalogueRowData).max(5000).default([]),source:z.string().max(300).default(''),types:z.array(EquipmentTypeData).max(MAX_TYPES).default([]),learned:z.array(LearnedData).max(MAX_LEARNED).default([])}).prefault({});
 export type Loads=z.infer<typeof Loads>;
 export const SuggestDefaults=z.object({cableType:z.string().max(300),cores3:z.string().max(300),cores1:z.string().max(300),method:z.string().max(300),vdPct:z.string().max(300)});
 export const BendGuidance=z.object({type:z.enum(['','single','multi','armoured','fire','fire-armoured']).default(''),installation:z.string().max(30).default(''),fixed:z.string().max(30).default(''),source:z.string().max(500).default('')}).default({type:'',installation:'',fixed:'',source:''});

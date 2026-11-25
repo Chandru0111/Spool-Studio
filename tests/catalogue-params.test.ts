@@ -1,10 +1,10 @@
 import {describe,expect,it} from 'vitest';
 import {loadsIn,nameScore,valueIn} from '../src/import/vocabulary';
 import {catalogueFromTables} from '../src/import/rating-table';
-import {catalogueFromDatasheet} from '../src/import/webpage';
+import {catalogueFromDatasheet,pickAt} from '../src/import/webpage';
 import {catalogueFromPages} from '../src/import/equipment';
-import {BUILT_IN} from '../src/engine/equipment-types';
-import type {PositionedLine} from '../src/import/parse';
+import {BUILT_IN,withLearned} from '../src/engine/equipment-types';
+import {phrases,type PositionedLine} from '../src/import/parse';
 
 // Made-up catalogue pages and labels only: no maker's sheet is copied here.
 const motor=[BUILT_IN.find(t=>t.id==='motor')!];
@@ -95,5 +95,45 @@ describe('reading a rating table',()=>{
   expect(rows.map(r=>[r.entry.efficiency,r.entry.pf])).toEqual([['0.82','0.72'],['0.83','0.74']]);
   expect(rows.map(r=>r.entry.extra)).toEqual([{frequency:'50',weight:'9'},{frequency:'60',weight:'9'}]);
   expect(rows[1]!.entry.config).toContain('60 Hz');
+ });
+});
+
+describe('learning a label the engineer taught by clicking its value',()=>{
+ it('reads a value printed after a taught label, for that type only',()=>{
+  const lines=['Motor data','  Motor type     QX-160M4','  Rated output     11 kW','  Rated voltage     400 V','  Terminal draw     21.5 A'];
+  const read=(types:typeof motor)=>catalogueFromDatasheet([page(1,lines)],'made-up.pdf',new Map(),new Map(),types).proposals[0]!.entry.inA;
+  expect(read(motor)).toBe('');
+  expect(read(withLearned(motor,[{type:'motor',key:'rated-current',label:'Terminal  draw'}]))).toBe('21.5');
+  expect(read(withLearned(motor,[{type:'heater',key:'rated-current',label:'Terminal draw'}]))).toBe('');
+ });
+ it('takes the clicked value with the unit printed after it, and the words printed before it as the label',()=>{
+  const at=(x:number,text:string,w:number)=>({x,w,h:10,y:700,text});
+  const line={y:700,cells:[at(40,'Rated',25),at(68,'output',30),at(160,'11',10),at(173,'kW',12),at(300,'Vector Group',60),at(420,'YNd 11',30)]};
+  expect(pickAt(line,2)).toEqual({text:'11 kW',label:'Rated output'});
+  expect(pickAt(line,5)).toEqual({text:'YNd 11',label:'Vector Group'});
+  expect(pickAt({cells:[at(40,'Rated power 7.5 kW',90)]},0)).toEqual({text:'7.5 kW',label:'Rated power'});
+ });
+});
+
+describe('reading a page as it is laid out',()=>{
+ const at=(x:number,text:string,w:number)=>({x,w,h:10,y:700,text}),line=(...cells:ReturnType<typeof at>[])=>({y:700,cells});
+ it('joins items set a word space apart, parts columns, and drops dotted leaders',()=>{
+  expect(phrases([line(at(40,'Rated',24),at(67,'output',30),at(160,'11',10),at(173,'kW',12))])).toBe('Rated output  11 kW');
+  // A label the PDF split at a ligature, and a fixed-width font, whose word space is a whole letter wide.
+  expect(phrases([line(at(40,'E',6),at(46,'ffi',12),at(58,'ciency',30))])).toBe('Efficiency');
+  expect(phrases([line(at(31,'Motor',36),at(74,'type',29),at(204,'QX-160M4',58))])).toBe('Motor type  QX-160M4');
+  expect(phrases([line(at(40,'Rated current',60),at(102,'........',30),at(140,'21 A',20))])).toBe('Rated current  21 A');
+ });
+ it('keeps apart items a drawn border separates, however close',()=>{
+  const l=line(at(40,'In',10),at(53,'21',10));
+  expect(phrases([l])).toBe('In 21');
+  expect(phrases([l],[{x0:51.5,x1:51.5,y0:695,y1:712}])).toBe('In  21');
+ });
+ it('reads labels under a heading with the heading, so each side of a transformer gets its own values',()=>{
+  const hv=BUILT_IN.find(t=>t.id==='hv-transformer')!;
+  const {proposals:[r]}=catalogueFromDatasheet([page(1,['Made-up transformer data','Rated power     1000 kVA','HV side','  Rated voltage     11 kV','  Rated current     52.5 A',
+   'LV side','  Rated voltage     400 V','  Rated current     1443.4 A'])],'made-up.pdf',new Map(),new Map(),[hv]);
+  expect(r!.entry).toMatchObject({un:'400 V',inA:'1443.4'});
+  expect(r!.entry.extra).toMatchObject({'rated-power':'1000','hv-voltage':'11','hv-current':'52.5'});
  });
 });
