@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "7463652ee05f64f15b09b579bf4457db70337f3e83eba41d57b7fbba523e4e3f",
+  "sourceFingerprint": "f3326bed8ee0c885056ecffeb4130cefa8b7a086690e509b988bbafe47158270",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -877,6 +877,18 @@
         "name": "leaves a sheet without merges as it is"
       },
       {
+        "file": "tests/page-list.test.ts",
+        "name": "reads pages and ranges in order, once each"
+      },
+      {
+        "file": "tests/page-list.test.ts",
+        "name": "refuses words and pages outside the document"
+      },
+      {
+        "file": "tests/page-list.test.ts",
+        "name": "writes pages back as ranges"
+      },
+      {
         "file": "tests/panels.test.ts",
         "name": "reads stacked panel blocks on one sheet and gives each load its panel as From"
       },
@@ -1108,8 +1120,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-25T02:08:21.956Z",
-    "sourceFingerprint": "7463652ee05f64f15b09b579bf4457db70337f3e83eba41d57b7fbba523e4e3f",
+    "checkedAt": "2026-11-25T02:34:14.255Z",
+    "sourceFingerprint": "f3326bed8ee0c885056ecffeb4130cefa8b7a086690e509b988bbafe47158270",
     "status": "passed",
     "steps": [
       {
@@ -1120,7 +1132,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  15 passed (15); Tests  148 passed (148)"
+        "summary": "Test Files  16 passed (16); Tests  151 passed (151)"
       },
       {
         "command": "npm run build",
@@ -1188,7 +1200,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "ad0fa7da32f2ff13fdade370e05a31c32d86f466c50e08f71d71f10552111ad6",
+      "sha256": "59ddcefd1744c166f462b30b42c8aaa4b663642a8dca2d9821931bec8b2bad0b",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1620,8 +1632,8 @@
     },
     {
       "path": "src/import/document.ts",
-      "bytes": 10456,
-      "sha256": "fc3d0314a6c350ef72923df13233bec1cc8a797ee9cc51bff0e86b27b15bafa4",
+      "bytes": 12175,
+      "sha256": "89dd970704d24165042e6589065f06b45cab1a2eb5929e85a3bc57394918b42e",
       "role": "Local PDF text extraction with position-aware columns, drawn table borders for equipment datasheet pages (rulesOf), and on-device PaddleOCR for scanned pages (ocrReader loads ONNX Runtime and the models from vendor/ocr/; imagePixels). Used by supplier drum imports and the catalogue datasheet reader.",
       "exports": [
         "MAX_DOCUMENT",
@@ -1630,6 +1642,9 @@
         "closePage",
         "imagePixels",
         "ocrReader",
+        "pageCount",
+        "pageList",
+        "rangesOf",
         "readCatalogue",
         "renderPage"
       ],
@@ -2049,8 +2064,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 25451,
-      "sha256": "dbd6aaa6adf1febe02900c373f1ae071f1d19818cf6a5db855f5ecf44d1252f3",
+      "bytes": 29326,
+      "sha256": "7cf9083d7c1d73fb00c563290cc1511fb7ad8df8e8da2cbe361a606cd9113a5c",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
@@ -2301,8 +2316,8 @@
     },
     {
       "path": "src/ui/app.css",
-      "bytes": 103124,
-      "sha256": "8cff92ae8be1bf9ebf4d50187e55b2bf142123cd8af8c499b01b2515486e1343",
+      "bytes": 103604,
+      "sha256": "77ca7194846452ab97af3ea1defa4748d813dffc87ec05fc593d9611972985c2",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -2651,6 +2666,23 @@
         "reads an equipment list with merged titles, headings, shared cells and a two-line item",
         "reads a panel load list with a merged title, section heading, two-column heading and a shared voltage",
         "leaves a sheet without merges as it is"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/page-list.test.ts",
+      "bytes": 707,
+      "sha256": "1866ee9da569213bb8347a7d25b171b0a16a4f9705195cbd48b4e66e8a33022d",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/import/document",
+        "vitest"
+      ],
+      "tests": [
+        "reads pages and ranges in order, once each",
+        "refuses words and pages outside the document",
+        "writes pages back as ranges"
       ],
       "runtime": false
     },
@@ -4483,6 +4515,17 @@
       "relation": "external"
     },
     {
+      "from": "tests/page-list.test.ts",
+      "to": "src/import/document.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/page-list.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/panels.test.ts",
       "to": "src/engine/suggest.ts",
       "relation": "imports",
@@ -4707,81 +4750,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-25T02:08:22.023Z",
+  "updatedAt": "2026-11-25T02:34:14.321Z",
   "history": [
-    {
-      "at": "2026-11-24T09:44:52.030Z",
-      "added": [],
-      "modified": [
-        "package-lock.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T10:07:53.577Z",
-      "added": [],
-      "modified": [
-        "src/import/equipment.ts",
-        "src/import/load-list.ts",
-        "src/import/panels.ts",
-        "src/ui/LoadList.tsx"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T10:08:12.612Z",
-      "added": [
-        "tests/merged-cells.test.ts"
-      ],
-      "modified": [],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T10:08:34.844Z",
-      "added": [],
-      "modified": [
-        "src/import/load-list.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T10:08:49.063Z",
-      "added": [],
-      "modified": [
-        "src/import/equipment.ts",
-        "src/import/load-list.ts",
-        "src/import/panels.ts",
-        "src/ui/LoadList.tsx"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T10:08:49.590Z",
-      "added": [],
-      "modified": [
-        "src/import/equipment.ts",
-        "src/import/load-list.ts",
-        "src/import/panels.ts",
-        "src/ui/LoadList.tsx"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T10:09:00.705Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-24T10:09:13.584Z",
-      "added": [],
-      "modified": [
-        "docs/verification.json"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-25T02:05:54.111Z",
       "added": [
@@ -4810,6 +4780,72 @@
     },
     {
       "at": "2026-11-25T02:08:22.023Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:30:36.455Z",
+      "added": [],
+      "modified": [
+        "src/import/document.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:31:02.196Z",
+      "added": [],
+      "modified": [
+        "src/ui/Catalogue.tsx",
+        "src/ui/app.css"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:31:12.838Z",
+      "added": [],
+      "modified": [
+        "src/ui/Catalogue.tsx"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:31:36.630Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:31:42.032Z",
+      "added": [
+        "tests/page-list.test.ts"
+      ],
+      "modified": [],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:31:54.578Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:33:07.592Z",
+      "added": [],
+      "modified": [
+        "src/ui/Catalogue.tsx",
+        "src/ui/app.css"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T02:34:14.321Z",
       "added": [],
       "modified": [
         "docs/verification.json"

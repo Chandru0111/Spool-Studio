@@ -16,10 +16,32 @@ async function loadPdf(bytes:ArrayBuffer) {
 // The PDF being reviewed stays open so its pages can be shown with the values read from them; closePage releases it.
 let shown:{file:File;doc:ReturnType<typeof loadPdf>}|null=null;
 export function closePage(){void shown?.doc.then(d=>d.destroy(),()=>undefined);shown=null;}
+const opened=(file:File)=>{if(shown?.file!==file){closePage();shown={file,doc:file.arrayBuffer().then(loadPdf)};}return shown.doc;};
+// How many pages a PDF has, opened for choosing which to read; the pages shown while choosing reuse it.
+export async function pageCount(file:File):Promise<number> {
+  if(file.size>MAX_DOCUMENT)throw Error('File exceeds 100 MB. Split the catalogue before uploading.');
+  if(new TextDecoder().decode(await file.slice(0,5).arrayBuffer())!=='%PDF-')throw Error('The file is not a valid PDF.');
+  return (await opened(file)).numPages;
+}
+// "3, 12-14, 40–45" as page numbers in order; a word or a page outside the document is an error.
+export function pageList(text:string,total:number):number[] {
+  const out=new Set<number>();
+  for(const part of text.split(/[,;]/).map(s=>s.trim()).filter(Boolean)){
+    const m=/^(\d+)(?:\s*[-–—]\s*(\d+))?$/.exec(part);if(!m)throw Error(`"${part}" is not a page or a range like 12-14.`);
+    const a=Number(m[1]),b=Number(m[2]??m[1]);if(a<1||a>b||b>total)throw Error(`"${part}" is outside pages 1 to ${total}.`);
+    for(let n=a;n<=b;n++)out.add(n);
+  }
+  return [...out].sort((x,y)=>x-y);
+}
+// Page numbers written back as ranges: [3, 12, 13, 14] gives "3, 12-14".
+export function rangesOf(pages:readonly number[]):string {
+  const sorted=[...new Set(pages)].sort((x,y)=>x-y),out:string[]=[];
+  for(let i=0;i<sorted.length;){let j=i;while(sorted[j+1]===sorted[j]!+1)j++;out.push(j>i?`${sorted[i]}-${sorted[j]}`:`${sorted[i]}`);i=j+1;}
+  return out.join(', ');
+}
 // Draws one page onto the canvas and returns a mapper from PDF points to canvas pixels.
 export async function renderPage(file:File,number:number,canvas:HTMLCanvasElement,width:number):Promise<(r:[number,number,number,number])=>number[]> {
-  if(shown?.file!==file){closePage();shown={file,doc:file.arrayBuffer().then(loadPdf)};}
-  const page=await (await shown.doc).getPage(number),viewport=page.getViewport({scale:width/page.getViewport({scale:1}).width});
+  const page=await (await opened(file)).getPage(number),viewport=page.getViewport({scale:width/page.getViewport({scale:1}).width});
   canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
   try{await page.render({canvas,viewport}).promise;}finally{page.cleanup();}
   return r=>viewport.convertToViewportRectangle(r);
@@ -44,8 +66,9 @@ export const MAX_DOCUMENT=100*1024*1024,MAX_PAGES=1500;
 // layout: each text page's lines with item positions, for reading rating tables by column (not stored with the project).
 // rules: for equipment datasheets, the table borders and shaded cells drawn on each page that holds a table.
 // Cable-rating extraction (rows) runs only for cable catalogues; equipment datasheets have their own readers.
+// pages: only these PDF pages are read (the engineer picked them); their scanned pages are always OCR'd.
 type Read=Catalogue&{layout:Map<number,PositionedLine[]>;rules:Map<number,Rule[]>};
-export async function readCatalogue(file:File,onProgress:(p:Progress)=>void,signal:AbortSignal,kind:'cables'|'equipment'='cables'):Promise<Read> {
+export async function readCatalogue(file:File,onProgress:(p:Progress)=>void,signal:AbortSignal,kind:'cables'|'equipment'='cables',pages?:readonly number[]):Promise<Read> {
   if(file.size>MAX_DOCUMENT)throw Error('File exceeds 100 MB. Split the catalogue before uploading.');
   if(file.size===0)throw Error('This file is empty.');
   const ext=file.name.split('.').pop()?.toLowerCase();
@@ -84,10 +107,11 @@ export async function readCatalogue(file:File,onProgress:(p:Progress)=>void,sign
       const abortPdf=()=>{void doc.destroy();};signal.addEventListener('abort',abortPdf);
       try {
         // shortcut: pages are read one at a time and only their text is kept; past MAX_PAGES split the file.
-        if(doc.numPages>MAX_PAGES)throw Error(`PDF exceeds ${MAX_PAGES.toLocaleString('en')} pages. Split it into smaller sections.`);
+        const list=pages?pages.filter(n=>n>=1&&n<=doc.numPages):Array.from({length:doc.numPages},(_,i)=>i+1);
+        if(list.length>MAX_PAGES)throw Error(`PDF exceeds ${MAX_PAGES.toLocaleString('en')} pages. Split it into smaller sections.`);
         const sparse:number[]=[];
-        for(let number=1;number<=doc.numPages;number++) {
-          check();onProgress({message:`Text reader · page ${number} of ${doc.numPages}`,percent:(number-1)/doc.numPages*100});
+        for(const [k,number] of list.entries()) {
+          check();onProgress({message:`Text reader · page ${number}${pages?` (${k+1} of ${list.length})`:` of ${doc.numPages}`}`,percent:k/list.length*100});
           const page=await doc.getPage(number);const content=await page.getTextContent();
           const lines=new Map<number,{x:number;w:number;h:number;y:number;text:string}[]>();
           for(const item of content.items) if('str' in item&&item.str.trim()) {const y=Math.round((item.transform[5]??0)/3)*3;const line=lines.get(y)??[];line.push({x:item.transform[4]??0,w:item.width||0,h:item.height||0,y:item.transform[5]??0,text:item.str});lines.set(y,line);}
@@ -101,7 +125,7 @@ export async function readCatalogue(file:File,onProgress:(p:Progress)=>void,sign
           page.cleanup();
         }
         // Pages without a text layer are scans when most of the file is (or there are only a few); in a long typed catalogue they are photos and drawings, not worth minutes of OCR.
-        if(sparse.length<=5||sparse.length*2>doc.numPages)for(const number of sparse) {
+        if(pages||sparse.length<=5||sparse.length*2>doc.numPages)for(const number of sparse) {
           check();const page=await doc.getPage(number);
           const viewport=page.getViewport({scale:Math.min(2,2200/Math.max(page.view[2]??600,page.view[3]??800))});
           const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);

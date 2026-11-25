@@ -4,7 +4,7 @@ import {project,setLoads,notify} from './state';
 import {CATALOGUE_KEYS,emptyEntry,unique,sameText,type CatalogueKey} from '../engine/loads';
 import {clip,MAX_CELL} from '../engine/sheet';
 import {readTables} from '../import/load-list';
-import {readCatalogue,renderPage,closePage} from '../import/document';
+import {readCatalogue,renderPage,closePage,pageCount,pageList,rangesOf} from '../import/document';
 import {readEquipment,mergeCatalogue,locate,type Proposal} from '../import/equipment';
 import {catalogueFromDatasheet,catalogueFromWeb,pageText,redirectTarget,MAX_PAGE} from '../import/webpage';
 import {exportCatalogue} from '../export/equipment';
@@ -110,6 +110,32 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
  </section>{view!==null&&read.pdf&&rows[view]&&<PageView file={read.pdf} p={rows[view]} lines={read.layout?.get(rows[view].page)} onClose={()=>setView(null)}/>}</div>;
 }
 
+// A long catalogue is read only where the engineer points: they look through the pages and pick the tables or datasheets
+// they want, so a few pages are read (and OCR'd if scanned) instead of hundreds.
+function PagePicker({file,total,onRead,onClose}:{file:File;total:number;onRead:(pages?:number[])=>void;onClose:()=>void}) {
+ const canvas=useRef<HTMLCanvasElement>(null),queue=useRef(Promise.resolve()),[at,setAt]=useState(1),[text,setText]=useState(''),[error,setError]=useState('');
+ // One page is drawn at a time: a canvas cannot take a second drawing while the first is under way.
+ useEffect(()=>{const c=canvas.current;if(!c)return;let live=true;setError('');
+  queue.current=queue.current.then(()=>live?renderPage(file,at,c,Math.min(1800,Math.round(800*devicePixelRatio))).then(()=>undefined):undefined).catch((e:unknown)=>{if(live)setError(message(e,'Could not show the page.'));});
+  return ()=>{live=false;};},[file,at]);
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();onClose();}};addEventListener('keydown',key,true);return ()=>removeEventListener('keydown',key,true);},[onClose]);
+ let pages:number[]=[],bad='';try{pages=pageList(text,total);}catch(e){bad=message(e,'Check the pages.');}
+ const on=pages.includes(at),go=(n:number)=>setAt(Math.min(total,Math.max(1,Math.round(n)||1)));
+ return <div class="modal-backdrop"><section class="modal schematic-modal page-view page-pick" role="dialog" aria-modal="true" aria-label="Choose the pages to read">
+  <div class="panel-heading"><div><div class="eyebrow">CHOOSE PAGES</div><h2>{file.name}</h2><p>{total} pages. Look through them and pick the ones with the tables or datasheets you want; only those are read.</p></div><button class="icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></div>
+  <div class="page-pick-bar"><button class="button ghost small" disabled={at<=1} onClick={()=>go(at-1)}>Previous</button>
+   <label class="page-jump"><span>Page</span><input type="number" min={1} max={total} value={at} aria-label="Page shown" onChange={e=>go(Number(e.currentTarget.value))}/><span class="muted">of {total}</span></label>
+   <button class="button ghost small" disabled={at>=total} onClick={()=>go(at+1)}>Next</button>
+   <label class="check-inline"><input type="checkbox" checked={on} onChange={()=>setText(rangesOf(on?pages.filter(p=>p!==at):[...pages,at]))}/>Read this page</label></div>
+  {error&&<p class="sheet-empty">{error}</p>}
+  <div class="page-scroll"><div class="page-canvas"><canvas ref={canvas}/></div></div>
+  <label class="field page-list"><span>Pages to read</span><input value={text} placeholder="For example 12, 40-45" aria-invalid={!!bad} onInput={e=>setText(e.currentTarget.value)}/></label>
+  <div class="modal-actions">{bad?<span class="form-error">{bad}</span>:<span class="muted">{pages.length?`${pages.length} page${pages.length===1?'':'s'} chosen: ${rangesOf(pages)}`:'No pages chosen yet.'}</span>}
+   <button class="button secondary small" onClick={()=>onRead()}>Read all {total} pages</button>
+   <button class="button primary small" disabled={!pages.length||!!bad} onClick={()=>onRead(pages)}><Check size={15}/>Read {pages.length||''} page{pages.length===1?'':'s'}</button></div>
+ </section></div>;
+}
+
 // A vendor's product page. Browsers do not let one website read another (and vendors block bots), so the user copies the page
 // in their own browser and pastes it here; the HTML is only converted to text, never shown.
 function PastePage({onRead,onClose}:{onRead:(text:string,source:string)=>void;onClose:()=>void}) {
@@ -135,7 +161,7 @@ function PastePage({onRead,onClose}:{onRead:(text:string,source:string)=>void;on
 export function Catalogue() {
  const cat=project.value.loads.catalogue,book=useRef<HTMLInputElement>(null),pdf=useRef<HTMLInputElement>(null),stop=useRef<AbortController|null>(null);
  const [busy,setBusy]=useState(''),[read,setRead]=useState<Read|null>(null),[brand,setBrand]=useState(''),[q,setQ]=useState(''),[pasting,setPasting]=useState(false);
- const [choosing,setChoosing]=useState<'pdf'|'paste'|null>(null),chosen=useRef<EquipmentType[]>([]);
+ const [choosing,setChoosing]=useState<'pdf'|'paste'|null>(null),chosen=useRef<EquipmentType[]>([]),[picking,setPicking]=useState<{file:File;total:number}|null>(null);
  const types=allTypes(project.value.loads.types),typeName=(id?:string)=>types.find(t=>t.id===id)?.name.trim();
  // An entry's catalogue-only values, named by its type's parameters.
  const others=(e:CatalogueRow)=>{const t=types.find(x=>x.id===e.type);return Object.entries(e.extra??{}).map(([k,v])=>{const p=t?.params.find(x=>x.key===k);return `${p?.label||k}: ${v}${p?.unit?` ${p.unit}`:''}`;}).join('; ');};
@@ -155,13 +181,16 @@ export function Catalogue() {
   const r=catalogueFromWeb(text,source);setPasting(false);
   setRead({file:source,pages:[{page:1,text,mode:'text',confidence:null}],ocr:0,proposals:applyPick(r.proposals,chosen.current),brand:brand||r.brand,types:chosen.current});
  }
- async function openPdf(f:File){
+ // pages: the pages picked; null when the engineer chose to read them all.
+ async function openPdf(f:File,pages?:number[]|null){
   const ctl=new AbortController();stop.current=ctl;setBusy('Reading the datasheet…');
   try{if(/\.html?$/i.test(f.name)){if(f.size>MAX_PAGE)throw Error('The page is larger than 5 MB.');
    const html=await f.text(),to=redirectTarget(html);
    if(to)throw Error(`${f.name} is only a saved link, not the document. Open ${to} in your browser, save the PDF it shows, then read that PDF here.`);
    fromWeb(pageText(html),f.name);return;}
-   const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment'),r=catalogueFromDatasheet(doc.pages,f.name,doc.layout,doc.rules,chosen.current.flatMap(t=>t.params));
+   // A PDF of more than one page: the engineer picks the pages to read first.
+   if(/\.pdf$/i.test(f.name)&&pages===undefined){const total=await pageCount(f);if(total>1){setPicking({file:f,total});return;}}
+   const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment',pages??undefined),r=catalogueFromDatasheet(doc.pages,f.name,doc.layout,doc.rules,chosen.current.flatMap(t=>t.params));
    setRead({file:f.name,pages:doc.pages,ocr:doc.pages.filter(p=>p.mode==='ocr').length,proposals:applyPick(r.proposals,chosen.current),brand:brand||r.brand,types:chosen.current,...(/\.pdf$/i.test(f.name)?{pdf:f,layout:doc.layout}:{})});}
   catch(e){notify(message(e,'Could not read the datasheet.'));}finally{setBusy('');stop.current=null;if(pdf.current)pdf.current.value='';}
  }
@@ -170,6 +199,7 @@ export function Catalogue() {
   <input ref={pdf} class="visually-hidden" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.html,.htm" aria-label="Choose datasheet" onChange={e=>{const f=e.currentTarget.files?.[0];if(f)void openPdf(f);}}/>
   {read&&<Review read={read} setRead={setRead} onClose={()=>{closePage();setRead(null);}}/>}
   {pasting&&<PastePage onRead={fromWeb} onClose={()=>setPasting(false)}/>}
+  {picking&&<PagePicker file={picking.file} total={picking.total} onRead={pages=>{setPicking(null);void openPdf(picking.file,pages??null);}} onClose={()=>{setPicking(null);closePage();}}/>}
   {choosing&&<TypePicker pick={lastPick.value} setPick={p=>{lastPick.value=p;}} action={choosing==='pdf'?'Choose file':'Paste the page'} onContinue={chose} onClose={()=>setChoosing(null)}/>}
   {busy&&<div class="reading-bar" role="status"><Network size={15}/><span>{busy}</span>{stop.current&&<button class="button secondary small" onClick={()=>stop.current?.abort()}>Cancel</button>}</div>}
   <div class="sheet-section-head"><div><h2>Brand catalogue</h2><p>One row per Brand + Model + Configuration. A load list row that picks them fills in the rest. Saved with the project; export it to reuse in other projects.</p></div>
