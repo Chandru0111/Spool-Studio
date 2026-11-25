@@ -7,7 +7,7 @@ import {BUILT_IN} from '../src/engine/equipment-types';
 import type {PositionedLine} from '../src/import/parse';
 
 // Made-up catalogue pages and labels only: no maker's sheet is copied here.
-const motor=BUILT_IN.find(t=>t.id==='motor')!.params;
+const motor=[BUILT_IN.find(t=>t.id==='motor')!];
 const page=(n:number,lines:string[])=>({page:n,text:lines.join('\n'),mode:'text' as const,confidence:null});
 
 describe('load points',()=>{

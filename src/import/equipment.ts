@@ -3,7 +3,7 @@ import {ID_WORDS,LOAD_NOUNS,fieldsIn,loadsIn} from './vocabulary';
 import {DUTIES,FROM_CATALOGUE,LOAD_KEYS,TICK,TICK_KEYS,emptyEntry,emptyLoad,fillRow,indexCatalogue,isTick,num,sameText,
  DEFAULT_FACTORS,DEFAULT_MARGIN,type CatalogueIndex,type CatalogueKey,type CatalogueRow,type Duty,type Factors,type LoadKey} from '../engine/loads';
 import type {LoadPanel,PageEvidence} from '../store/schema';
-import type {EquipmentType} from '../engine/equipment-types';
+import type {EquipmentType,Param} from '../engine/equipment-types';
 import {cleanValue,itemRows,normalize,valueColumns,type InputTable} from './load-list';
 import type {PositionedLine} from './parse';
 
@@ -211,6 +211,8 @@ const takes=(t:EquipmentType)=>new Set(t.params.map(p=>p.feeds).filter(Boolean))
 export function applyPick(rows:readonly Proposal[],types:readonly EquipmentType[]):Proposal[] {
  if(!types.length)return [...rows];
  return rows.map(p=>{
+  // A reader that read the row for each picked type has already chosen.
+  if(p.entry.type&&types.some(t=>t.id===p.entry.type))return p;
   const found=FROM_CATALOGUE.filter(k=>p.entry[k].trim()),score=types.map(t=>{const s=takes(t);return found.reduce((n,k)=>n+(s.has(k)?1:-1),0);});
   const top=Math.max(...score);
   return {...p,entry:{...p.entry,type:types[score.indexOf(top)]!.id},typeGuess:score.filter(s=>s===top).length>1};
@@ -260,6 +262,20 @@ const MODEL=new RegExp(`(?<![\\p{L}\\p{N}])(?:(?:${NUMBERED_IDS})\\.?|(?:${PLAIN
 export const dot=(v:string)=>v.replace(',','.');
 // Decimals throughout: an efficiency of 94.2 (%) is kept as 0.942.
 export const asFraction=(v:string)=>{const n=num(dot(v));return n!==null&&n>1&&n<=100?String(+(n/100).toFixed(4)):dot(v);};
+// Numbers as written: ranges and dual ratings (19.8-22.5, 115/230) are kept for the engineer to choose.
+export const group=(v:string)=>dot(v.replace(/(\d),(\d)/g,'$1.$2')).match(/\d+(?:\.\d+)?(?:\s*(?:[-–/]|\.{2,3}|…)\s*\d+(?:\.\d+)?)*/)?.[0].replace(/\s+/g,'').replace(/–|…|\.{2,3}/g,'-')??'';
+// The unit each load list column holds, so a parameter printed in W, kW or hp fills Rated Input Power in kW.
+const COLUMN_UNIT:Partial<Record<CatalogueKey,string>>={ratedKw:'kW',inA:'A',protA:'A',un:'V'};
+// A parameter as it is read: in the unit of the load list column it fills, else in its own.
+export const reading=(p:Param)=>({label:p.label,unit:(p.feeds&&COLUMN_UNIT[p.feeds])||p.unit});
+// A value read for a load list column, as the column holds it: the figures as printed, a voltage with V, an efficiency
+// or power factor as a fraction of at most 1.
+export function inColumn(feed:CatalogueKey,value:string):string {
+ const n=group(value);if(!n)return '';
+ if(feed==='un')return `${n} V`;
+ if(feed!=='efficiency'&&feed!=='pf')return n;
+ const f=asFraction(n),x=num(f);return x===null||x>0&&x<=1?f:'';
+}
 export function catalogueFromPages(pages:readonly PageEvidence[],file:string):Proposal[] {
  const out:Proposal[]=[];
  for(const page of pages){

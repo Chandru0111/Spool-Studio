@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "5c78d632f5fd9b6b619affed8ffcc3d643b642f6cfa704b4b1e6808e44e13476",
+  "sourceFingerprint": "520a42dab8a716ba470cc07f7f77e694e580380c98e161124b8e83c7ac95474b",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -265,9 +265,9 @@
       "src/ui/Catalogue.tsx": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "src/ui/Scenario.tsx": "Search across panels by KKS/description, scenario comparison table and inline-SVG grouped bar charts, plant load by panel.",
       "src/export/equipment-layout.ts": "Panel sheet layout: header rows 1-6, at least 32 item rows, the running plant load, operating factors and load basis summary, page setup; formulas with cached results.",
-      "src/import/vocabulary.ts": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix).",
-      "src/import/rating-table.ts": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values.",
-      "src/import/webpage.ts": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright."
+      "src/import/vocabulary.ts": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers.",
+      "src/import/rating-table.ts": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values. With equipment types picked (catalogueFromTables types), each table is read for the type whose ticked parameters its columns give most: feedsOf gives every load-list-feeding parameter its column by nameScore (one column each, best first, efficiency/pf at full load only), else the vocabulary/P-formula column of the one quantity its label names; a table needs two parameters with columns and half the required ones, so breaker, DB, capacitor and other non-motor tables are read and motor-only rules apply only without types.",
+      "src/import/webpage.ts": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright. With equipment types picked, a one-product sheet or page is read for each type (paramsOf: every ticked parameter, feeding or not, takes its best-named label, one value each, best first, full load preferred, part load only when the parameter is named at it, a unit like kvar printed once names its parameter, running-text lines split by looseOf); the product takes the type found most and its load list columns come only from that type's parameters, in the column's unit (W and hp as kW)."
     },
     "calculationReference": {
       "electrical": "I1 = kW × diversity × 1000 / (V × PF × (sqrt(3) for 3-phase, else 1)); Ib = I1 × sqrt(1 + THD²); Iz = It × parallel × Ca × Cg × Cs × Ci × Ct; circuit VD% = Ib × run_m × mV/A/m / (10 × parallel × V).",
@@ -635,6 +635,38 @@
       {
         "file": "tests/drawing.test.ts",
         "name": "copes with noise, huge stroke counts and thousands of words quickly"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads a breaker by its symbols and fills the protection rating, not the current"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads lighting power in W into kW, and a capacitor bank's kvar by its unit"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "tells input from output, normal from heavy duty, and primary from secondary"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads a distribution board from its own wording"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "picks the type whose parameters the sheet gives, of several picked"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "searches for the parameters the engineer added to their own type, from a pasted web page"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads a breaker table into the protection rating, its voltage and breaking capacity"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads no table without equipment types unless it lists motors"
       },
       {
         "file": "tests/equipment-types.test.ts",
@@ -1156,8 +1188,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-25T03:22:17.331Z",
-    "sourceFingerprint": "5c78d632f5fd9b6b619affed8ffcc3d643b642f6cfa704b4b1e6808e44e13476",
+    "checkedAt": "2026-11-25T06:04:14.700Z",
+    "sourceFingerprint": "520a42dab8a716ba470cc07f7f77e694e580380c98e161124b8e83c7ac95474b",
     "status": "passed",
     "steps": [
       {
@@ -1168,7 +1200,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  17 passed (17); Tests  160 passed (160)"
+        "summary": "Test Files  18 passed (18); Tests  189 passed (189)"
       },
       {
         "command": "npm run build",
@@ -1207,15 +1239,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 11488,
-      "sha256": "3401a836ee8ee897b5de9bdb6835bfdc7ebd431b0785f193aa5f59232798e0f4",
+      "bytes": 11954,
+      "sha256": "ed81362fc00a2ce138d72c7a96f293610e8497cc58d244cbdb86ccb5b22350b8",
       "role": "Project configuration.",
       "runtime": false
     },
     {
       "path": "docs/project-knowledge.json",
-      "bytes": 44368,
-      "sha256": "97c1cfb9ad7558e94619ea82e393c63c53b8eb5d3a5d0f32d8d90f137eedbc1d",
+      "bytes": 45894,
+      "sha256": "6b583bb282c7c9d67ce64f13dc57ecc954f3685358faef09d58e5c2c5db7ac2e",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1236,7 +1268,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "ff75dd2a965adc8c86482b9504490446c1ea4d229e916349ad72caad7960d179",
+      "sha256": "60df48eeeda2b879b03e387c3256613894d6270d982937015897f7faa94aab07",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1732,8 +1764,8 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 25132,
-      "sha256": "5737b189cc1de7ac8c434fe552b0d295de172f721beee00b8f69b4b824e41373",
+      "bytes": 26393,
+      "sha256": "cdf04d76370e352a9230a5b81348513a7e232a14e62b6b2977c7893f95cebc5e",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification.",
       "exports": [
         "Box",
@@ -1743,12 +1775,15 @@
         "asFraction",
         "catalogueFromPages",
         "dot",
+        "group",
+        "inColumn",
         "keepPicked",
         "locate",
         "mergeCatalogue",
         "mergePanels",
         "mergeSizing",
         "readEquipment",
+        "reading",
         "toSizing",
         "verify"
       ],
@@ -1900,9 +1935,9 @@
     },
     {
       "path": "src/import/rating-table.ts",
-      "bytes": 29959,
-      "sha256": "4c9a7bb5139b09149f9cd6b348fd1e7b0cd8adb6144157813aac29cca0df5a72",
-      "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values.",
+      "bytes": 35557,
+      "sha256": "408d932e1fc3bcfddd35b16382a1fc5751b2916cdbb7577f588237c793e15bcb",
+      "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values. With equipment types picked (catalogueFromTables types), each table is read for the type whose ticked parameters its columns give most: feedsOf gives every load-list-feeding parameter its column by nameScore (one column each, best first, efficiency/pf at full load only), else the vocabulary/P-formula column of the one quantity its label names; a table needs two parameters with columns and half the required ones, so breaker, DB, capacitor and other non-motor tables are read and motor-only rules apply only without types.",
       "exports": [
         "catalogueFromTables"
       ],
@@ -1962,9 +1997,9 @@
     },
     {
       "path": "src/import/vocabulary.ts",
-      "bytes": 20301,
-      "sha256": "6a293be022cb0c02f2499710ea0dcb194cb76379fca548b4a0802a14eb7c9977",
-      "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix).",
+      "bytes": 25940,
+      "sha256": "17fc4e6fe816818f51aa0c2ffeec6faf41e3785657b7cc845acdd1d43892a6e9",
+      "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers.",
       "exports": [
         "Field",
         "ID_WORDS",
@@ -1976,7 +2011,10 @@
         "fold",
         "loadsIn",
         "nameScore",
+        "namesQuantity",
         "ratioOf",
+        "unitIn",
+        "unitNames",
         "valueIn"
       ],
       "imports": [],
@@ -1984,9 +2022,9 @@
     },
     {
       "path": "src/import/webpage.ts",
-      "bytes": 20307,
-      "sha256": "1b368bbb4c9ea053dd19f603063f182dbb9f5dc9c5e09111f9c959bf9405e23d",
-      "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright.",
+      "bytes": 24126,
+      "sha256": "e65d63b440ec3482a24825c5efcd49bba14b732475d013a9e33116f225995859",
+      "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright. With equipment types picked, a one-product sheet or page is read for each type (paramsOf: every ticked parameter, feeding or not, takes its best-named label, one value each, best first, full load preferred, part load only when the parameter is named at it, a unit like kvar printed once names its parameter, running-text lines split by looseOf); the product takes the type found most and its load list columns come only from that type's parameters, in the column's unit (W and hp as kW).",
       "exports": [
         "MAX_PAGE",
         "catalogueFromDatasheet",
@@ -2111,8 +2149,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 29362,
-      "sha256": "92e573c1ba439bcc450afa90d5037bfc2c72c6c7ff03ce10c8fff0dabed2269d",
+      "bytes": 29291,
+      "sha256": "fb6003f2f94e5670126102132921ddc565a0f118dfbe961b4b9cef76419c6adf",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet.",
       "exports": [
         "Catalogue"
@@ -2474,8 +2512,8 @@
     },
     {
       "path": "tests/catalogue-params.test.ts",
-      "bytes": 7047,
-      "sha256": "c315bfa37cc92d74ca0e6c3ee2e0bc637daaa1e22b9a7af85aa7a699c061c788",
+      "bytes": 7042,
+      "sha256": "8398170bf5ef31f164fdcff181c21af8eea4159c51d0d692f53a7ddbf6ef95b0",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2556,6 +2594,32 @@
         "reads US cable counts, feet and miles, MW and MVA, and ETAP-style tags",
         "reads a bare C16 as an MCB rating only where the drawing talks about MCBs",
         "copes with noise, huge stroke counts and thousands of words quickly"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/equipment-reading.test.ts",
+      "bytes": 8572,
+      "sha256": "2ad4f85c174d19fd6ef7ce7e25e37c8e33ea1730f4b069cff6d6b64a929bb470",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/engine/equipment-types",
+        "../src/engine/loads",
+        "../src/import/parse",
+        "../src/import/rating-table",
+        "../src/import/webpage",
+        "vitest"
+      ],
+      "tests": [
+        "reads a breaker by its symbols and fills the protection rating, not the current",
+        "reads lighting power in W into kW, and a capacitor bank's kvar by its unit",
+        "tells input from output, normal from heavy duty, and primary from secondary",
+        "reads a distribution board from its own wording",
+        "picks the type whose parameters the sheet gives, of several picked",
+        "searches for the parameters the engineer added to their own type, from a pasted web page",
+        "reads a breaker table into the protection rating, its voltage and breaking capacity",
+        "reads no table without equipment types unless it lists motors"
       ],
       "runtime": false
     },
@@ -2788,8 +2852,8 @@
     },
     {
       "path": "tests/rating-table-params.test.ts",
-      "bytes": 3115,
-      "sha256": "18694428c43bfeaf839378b5ae5bf148e2c76f9c5c411e5aa31e3d09d2010b32",
+      "bytes": 3110,
+      "sha256": "94769645710df7bd012caaf6311de220a287c27cf80f434c5e5c706f29211afa",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -4401,6 +4465,41 @@
       "relation": "external"
     },
     {
+      "from": "tests/equipment-reading.test.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-reading.test.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-reading.test.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-reading.test.ts",
+      "to": "src/import/rating-table.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-reading.test.ts",
+      "to": "src/import/webpage.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/equipment-reading.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/equipment-types.test.ts",
       "to": "src/engine/equipment-types.ts",
       "relation": "imports",
@@ -4878,24 +4977,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-25T03:22:17.401Z",
+  "updatedAt": "2026-11-25T06:04:14.770Z",
   "history": [
-    {
-      "at": "2026-11-25T03:11:38.800Z",
-      "added": [],
-      "modified": [
-        "src/import/vocabulary.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-25T03:12:20.801Z",
-      "added": [],
-      "modified": [
-        "src/import/vocabulary.ts"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-25T03:13:15.458Z",
       "added": [],
@@ -4973,6 +5056,32 @@
     },
     {
       "at": "2026-11-25T03:22:17.401Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T06:04:13.929Z",
+      "added": [
+        "tests/equipment-reading.test.ts"
+      ],
+      "modified": [
+        "README.md",
+        "docs/project-knowledge.json",
+        "src/import/equipment.ts",
+        "src/import/rating-table.ts",
+        "src/import/vocabulary.ts",
+        "src/import/webpage.ts",
+        "src/ui/Catalogue.tsx",
+        "tests/catalogue-params.test.ts",
+        "tests/rating-table-params.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-25T06:04:14.770Z",
       "added": [],
       "modified": [
         "docs/verification.json"

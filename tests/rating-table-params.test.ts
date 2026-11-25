@@ -5,7 +5,7 @@ import type {PositionedLine} from '../src/import/parse';
 
 // Made-up catalogue pages: each line at a height on the page, [x, text, width] per item, as the PDF text layer places them.
 const at=(y:number,...cells:[number,string,number?][]):PositionedLine=>({y,cells:cells.map(([x,text,w])=>({x,y,text,w:w??text.length*5}))});
-const motor=BUILT_IN.find(t=>t.id==='motor')!.params;
+const motor=[BUILT_IN.find(t=>t.id==='motor')!];
 const table=(rows:PositionedLine[])=>[
  at(700,[40,'AX1 IE3 4-POLE | 1500 RPM',120]),at(688,[40,'400 V 50 Hz',60]),
  at(670,[40,'Frame',30],[100,'Output',30],[150,'Speed',30],[200,'Current',40],[250,'Eff.',30],[300,'P.F.',30],[350,'Locked current',50],[420,'Weight',30]),

@@ -1,9 +1,9 @@
 import {clip} from '../engine/sheet';
 import {emptyEntry,num,type CatalogueKey} from '../engine/loads';
-import {asFraction,dot,verify,type Box,type Proposal} from './equipment';
-import {SHAPES,conceptOf,fieldsIn,loadsIn,nameScore,valueIn,type Field} from './vocabulary';
+import {asFraction,dot,inColumn,reading,verify,type Box,type Proposal} from './equipment';
+import {SHAPES,conceptOf,fieldsIn,loadsIn,nameScore,namesQuantity,valueIn,type Field} from './vocabulary';
 import type {PositionedLine,Rule} from './parse';
-import type {Param} from '../engine/equipment-types';
+import type {EquipmentType,Param} from '../engine/equipment-types';
 
 // Catalogue rating tables: one row per motor, pump or fan, with headings stacked over a few lines above the rows
 // ("Output / kW", "Current / In at 400 V / A", "Efficiency % / 100% 75%"). Columns are found from where the numbers
@@ -76,12 +76,11 @@ function classify(c:Column):Kind|'skip'|undefined {
 // Several columns of one kind (efficiency at 100/75/50 %, current at 380/400/415 V): take full load and 400 V, else the first.
 // Efficiency and power factor are only ever taken at full load: the load point over the column ("100 %", "4/4", "1/1",
 // "FL", "full load") says which that is, and a column at part load is never taken, even when it is the only one.
+// The load point a column is printed for: its own heading's, else the one its spanning heading names.
+const loadOf=(c:Column)=>{const own=new Set(c.own.flatMap(t=>loadsIn(t,true)));if(own.size===1)return [...own][0];const h=loadsIn(c.head.join(' '));return h.length===1?h[0]:undefined;};
 function pick(cols:readonly Column[],kind:Kind):Column|undefined {
  const of=cols.filter(c=>c.kind===kind),head=(c:Column)=>c.head.join(' ');
- if(kind==='eff'||kind==='pf'){
-  const load=(c:Column)=>{const own=new Set(c.own.flatMap(t=>loadsIn(t,true)));if(own.size===1)return [...own][0];const h=loadsIn(head(c));return h.length===1?h[0]:undefined;};
-  return of.find(c=>load(c)===1)??of.find(c=>load(c)===undefined);
- }
+ if(kind==='eff'||kind==='pf')return of.find(c=>loadOf(c)===1)??of.find(c=>loadOf(c)===undefined);
  const want=kind==='in'?[/(?<!\d)400(?!\d)/,/(?<!\d)415(?!\d)/,/(?<!\d)380(?!\d)/]:[];
  for(const re of want){const hit=of.find(c=>re.test(head(c)));if(hit)return hit;}
  return of[0];
@@ -139,17 +138,18 @@ function titleName(around:readonly Cell[][],left:number,right:number):{text:stri
 type Shape=readonly [RegExp,(m:RegExpMatchArray)=>string];
 type Plan={param:Param;how:'col';col:Column}|{param:Param;how:'poles'}|{param:Param;how:'hz'}|{param:Param;how:'code';shape:Shape};
 const esc=(s:string)=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-// The first way that fits: a field the reader already knows (speed, poles, frame size, a name or code column); the one
+// The first way that fits: a column the reader already knows (speed, poles, frame size, a name or code column); the one
 // column whose heading names the parameter best (nameScore: "Weight" or "Mass" in kg, "f" or "Freq." in Hz, "IE-CL",
 // "Starting current Ia/In" over "Is/In"); for a value in Hz, the supply frequency printed for the table; a code of the
 // shape the parameter's codes have, or the one its label names in capitals ("IP rating": IP55), printed on the row or over
 // the table. A heading that two columns fit equally names neither. Nothing found stays empty.
 function planOf(param:Param,cols:readonly Column[],core:ReadonlySet<Column|undefined>):Plan|undefined {
  const f=fieldsIn(param.label),top=[...f].sort((a,b)=>b[1]-a[1])[0]?.[0];
- if(!f.has('skip')&&top==='poles')return {param,how:'poles'};
- if(!f.has('skip')&&(top==='speed'||top==='frame'||top==='name'||top==='code')){const col=pick(cols,top);if(col)return {param,how:'col',col};}
+ if(!f.has('skip')&&(top==='speed'||top==='frame'||top==='name'||top==='code'||top==='poles')){const col=pick(cols,top);if(col)return {param,how:'col',col};}
  const fit=cols.filter(c=>!core.has(c)).map(c=>({col:c,score:nameScore(param,c.own.join('\n'),c.head.join('\n'))})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
  if(fit[0]&&fit[0].score!==fit[1]?.score)return {param,how:'col',col:fit[0].col};
+ // Poles no column gives (a breaker's 3, or a motor's from its speed) are worked out for each row.
+ if(!f.has('skip')&&top==='poles')return {param,how:'poles'};
  const concept=conceptOf(param.label);
  if(concept==='hz'||/^hz$/i.test(param.unit.trim()))return {param,how:'hz'};
  const shape=concept&&SHAPES[concept],abbr=param.label.match(/(?<![A-Za-z])[A-Z]{2,3}(?![A-Za-z])/)?.[0];
@@ -157,7 +157,35 @@ function planOf(param:Param,cols:readonly Column[],core:ReadonlySet<Column|undef
  return abbr?{param,how:'code',shape:[new RegExp(`(?<![A-Za-z])${esc(abbr)}\\s?(\\d{1,2})(?!\\d)`),m=>`${abbr}${m[1]}`]}:undefined;
 }
 
-export function catalogueFromTables(layout:ReadonlyMap<number,readonly PositionedLine[]>,file:string,rules:ReadonlyMap<number,readonly Rule[]>=new Map(),params:readonly Param[]=[]):Proposal[] {
+// The column each ticked parameter that fills a load list column is read from, whatever the equipment: the column whose
+// heading names it best (nameScore), each column going to one parameter, best match first; an efficiency or power factor
+// only at full load or where no load is printed. A heading two columns fit equally names neither. A parameter whose label
+// names nothing but its quantity ("Rated output", "Rated current In") otherwise reads the column the vocabulary, or
+// P = √3·U·I·η·cosφ, found for that quantity (kinds), so "P n" or an unlabelled column still serves.
+type Feed={param:Param;col:Column};
+function feedsOf(params:readonly Param[],cols:readonly Column[],ids:ReadonlySet<Column>,kinds:Partial<Record<Field,Column|undefined>>):Feed[] {
+ const full=(p:Param)=>p.feeds==='efficiency'||p.feeds==='pf';
+ const fits=params.flatMap(p=>p.feeds&&p.label.trim()?cols.flatMap(c=>{
+  if(ids.has(c)||c.skip||c.numbers<c.text||full(p)&&loadOf(c)!==1&&loadOf(c)!==undefined)return [];
+  const s=nameScore(p,c.own.join('\n'),c.head.join('\n'));return s>0?[{p,c,s:s+(loadOf(c)===1?0.5:0)}]:[];
+ }):[]).sort((a,b)=>b.s-a.s);
+ const out:Feed[]=[],taken=new Set<Column>(),settled=new Set<Param>();
+ for(const f of fits){
+  if(settled.has(f.p)||taken.has(f.c))continue;
+  settled.add(f.p);
+  if(fits.some(x=>x!==f&&x.p===f.p&&x.s===f.s&&!taken.has(x.c)))continue;
+  out.push({param:f.p,col:f.c});taken.add(f.c);
+ }
+ for(const p of params){
+  if(!p.feeds||out.some(f=>f.param===p))continue;
+  const q=namesQuantity(p),c=q&&kinds[q];if(c&&!taken.has(c)){out.push({param:p,col:c});taken.add(c);}
+ }
+ return out;
+}
+
+// types: the equipment types picked, each with its ticked parameters. Without any, tables of motors (kW with current,
+// efficiency or power factor) are read for the load list columns only.
+export function catalogueFromTables(layout:ReadonlyMap<number,readonly PositionedLine[]>,file:string,rules:ReadonlyMap<number,readonly Rule[]>=new Map(),types:readonly EquipmentType[]=[]):Proposal[] {
  const out:Proposal[]=[],seen=new Set<string>();
  for(const [page,lines] of layout){
   const cells=lines.map(cellsOf);let i=0;
@@ -275,9 +303,6 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    const modelCol=nameCol??(title?undefined:codes[0]);
    const configCols=ids.filter(c=>c!==modelCol).sort((a,b)=>a.x0-b.x0);
    const poles=pick(cols,'poles'),speed=pick(cols,'speed');
-   // A product table names its rows (a name, code or size column) or gives their current; a table of kW against
-   // efficiencies only (the IEC IE-class limits many catalogues reprint) lists no products, whatever its title.
-   if(!(kw||hp)||!(inA||eff||pf)||!(ids.length||inA))continue;
    const ctx=[...context,...(inA?[inA.head.join(' ')]:[])].join('\n');
    const tableHz=ctx.match(/\b(50|60)\s*Hz\b/i)?.[1],hzCol=cols.find(c=>c.skip&&fieldsIn(c.own.join(' ')).has('hz')),three=/3\s*~|three[\s-]*phase|\b3[\s-]*ph/i.test(ctx),one=/1\s*~|single[\s-]*phase|\b1[\s-]*ph/i.test(ctx);
    // A row's printed values, each kept only in a plausible range (kW from W or hp).
@@ -299,29 +324,68 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    const volts=voltsIn(inA?.head.join(' ')??'')??(mid!==undefined&&printed.length>1?printed.reduce((a,b)=>off(b)<off(a)?b:a):printed[0]);
    const voltLine=volts?ctx.split('\n').find(l=>voltsIn(l)===volts)??'':'';
    const hzLine=tableHz?ctx.split('\n').find(l=>new RegExp(`\\b${tableHz}\\s*Hz`,'i').test(l))??'':'';
-   const plans=params.filter(p=>!p.feeds&&p.label.trim()).map(p=>planOf(p,cols,new Set([kw,hp,inA,eff,pf,un]))).filter((p):p is Plan=>!!p);
-   const used:[Column|undefined,CatalogueKey][]=[[modelCol,'model'],...configCols.map(c=>[c,'config'] as [Column,CatalogueKey]),[kw,'ratedKw'],[hp,'ratedKw'],[inA,'inA'],[eff,'efficiency'],[pf,'pf'],[un,'un']];
+   // With equipment types picked, the table is read for the type whose ticked parameters its columns give most (a required
+   // one counting twice; a tie is flagged). It is a product table when at least two of them have a column, at least half
+   // the type's required ones are found (a voltage printed over the table counts), and its rows are named (a name, code or
+   // size column, or a product name over it) or it gives three or more. Without types, a product table names its rows or
+   // gives their current; a table of kW against efficiencies only (the IEC IE-class limits many catalogues reprint) lists
+   // no products, whatever its title.
+   let as:{t:EquipmentType;feeds:Feed[];plans:Plan[];guess:boolean}|undefined;
+   if(types.length){
+    const kinds={kw:kw??hp,in:inA,eff,pf,un},named=new Set(ids);
+    const fits=types.map(t=>{
+     const feeds=feedsOf(t.params,cols,named,kinds),taken=new Set(feeds.map(f=>f.col));
+     const plans=t.params.filter(p=>!p.feeds&&p.label.trim()).map(p=>planOf(p,cols,taken)).filter((p):p is Plan=>!!p);
+     const columns=feeds.length+plans.filter(p=>p.how==='col').length,req=t.params.filter(p=>p.required);
+     const has=(p:Param)=>feeds.some(f=>f.param===p)||plans.some(x=>x.param===p&&x.how==='col')||p.feeds==='un'&&!!volts;
+     return {t,feeds,plans,ok:columns>=2&&req.filter(has).length*2>=req.length&&(ids.length>0||!!title||columns>=3),score:t.params.reduce((n,p)=>n+(has(p)?p.required?2:1:0),0)};
+    }).filter(x=>x.ok);
+    const top=Math.max(...fits.map(x=>x.score)),best=fits.find(x=>x.score===top);
+    if(!best)continue;
+    as={t:best.t,feeds:best.feeds,plans:best.plans,guess:fits.filter(x=>x.score===top).length>1};
+   }else if(!(kw||hp)||!(inA||eff||pf)||!(ids.length||inA))continue;
+   const plans=as?.plans??[];
+   const feedCols:[Column|undefined,CatalogueKey][]=as?as.feeds.map(f=>[f.col,f.param.feeds as CatalogueKey]):[[kw,'ratedKw'],[hp,'ratedKw'],[inA,'inA'],[eff,'efficiency'],[pf,'pf'],[un,'un']];
+   const used:[Column|undefined,CatalogueKey][]=[[modelCol,'model'],...configCols.map(c=>[c,'config'] as [Column,CatalogueKey]),...feedCols];
+   // A row's value for a parameter that fills a load list column. A column the motor readers found for that column's
+   // quantity keeps their reading (kW from W or hp, values in a plausible range); any other is read in the column's unit.
+   const fedBy=(f:Feed,v:ReturnType<typeof read>,u:string):{value:string;was?:string}=>{
+    const k=f.param.feeds as CatalogueKey,c=f.col;
+    if(k==='ratedKw'&&(c===kw||c===hp))return {value:v.kw===null?'':String(v.kw)};
+    if((k==='inA'||k==='protA')&&c===inA)return {value:v.amps===null?'':String(v.amps)};
+    if(k==='efficiency'&&c===eff)return {value:v.ef===null?'':String(v.ef)};
+    if(k==='pf'&&c===pf)return {value:v.pf===null?'':String(v.pf)};
+    if(k==='un'&&c===un)return {value:u};
+    const x=valueIn(reading(f.param),v.raw(c),c.own.join('\n'));
+    return x?{value:inColumn(k,x.value),...(x.was?{was:x.was}:{})}:{value:''};
+   };
    for(const r of rows){
     const v=read(r),{at,raw,n,kwN,hpN}=v,e=emptyEntry(),evidence:string[]=[];
     // A table listing 50 Hz and 60 Hz ratings gives each row its frequency in a column of its own ("f", "Freq.", "Hz").
     const hz=(hzCol&&valueIn({label:'Frequency',unit:'Hz'},raw(hzCol),hzCol.own.join('\n'))?.value)||tableHz;
-    if(v.kw!==null)e.ratedKw=String(v.kw);
-    if(v.amps!==null)e.inA=String(v.amps);
-    if(v.ef!==null)e.efficiency=String(v.ef);
-    if(v.pf!==null)e.pf=String(v.pf);
+    if(!as){
+     if(v.kw!==null)e.ratedKw=String(v.kw);
+     if(v.amps!==null)e.inA=String(v.amps);
+     if(v.ef!==null)e.efficiency=String(v.ef);
+     if(v.pf!==null)e.pf=String(v.pf);
+    }
     // A voltage cell may carry the phases too ("3×400", "3~ 400").
     const uText=raw(un),uNum=num(dot(uText))??num(dot(uText.match(/\d{2,4}(?:[.,]\d+)?(?=\D*$)/)?.[0]??'')),u=uNum!==null&&un&&/\bkv\b/i.test(un.head.join(' '))?+(uNum*1000).toFixed(1):uNum;e.un=u!==null&&u>=50&&u<=36000?`${u} V`:volts?`${volts} V`:'';
     // Values that do not work out to the voltage are a misread or the wrong voltage (10 % covers rounding). With no phase
     // printed, values that work out on one phase but not on three are a single-phase motor.
     const rated=e.un.match(/\d+(?:\.\d+)?/g)?.map(Number)??[],fits=(single:boolean)=>{const w=implied(v,single);return w===null||!rated.length||rated.some(x=>Math.abs(w/x-1)<=0.1);};
     const printedPhase=/^3\s*[×x~]/.test(uText)||three?'3-phase':/^1\s*[×x~]/.test(uText)||one?'1-phase':'',worked=!printedPhase&&!fits(false)&&fits(true);
-    const phase=worked?'1-phase':printedPhase;
-    if(!e.ratedKw||![e.inA,e.efficiency,e.pf].some(Boolean))continue;
+    const phase=worked?'1-phase':printedPhase,converted=new Set<CatalogueKey>();
+    const fedEvidence:string[]=[];
+    if(as){
+     const u=e.un;
+     for(const f of as.feeds){
+      const k=f.param.feeds as CatalogueKey,got=fedBy(f,v,u);e[k]=got.value;if(!got.value)continue;
+      if(got.was||k==='ratedKw'&&(f.col===kw||f.col===hp)&&(kwN===null||watts))converted.add(k);
+      fedEvidence.push(got.was?`${f.col.head.slice(-2).join(' ')||'?'}: ${got.was} = ${got.value} ${reading(f.param).unit}`:`${f.col.head.slice(-2).join(' ')||'?'}: ${raw(f.col)}`);
+     }
+    }else if(!e.ratedKw||![e.inA,e.efficiency,e.pf].some(Boolean))continue;
     const spd=n(speed),np=n(poles),pl=(np!==null&&np>=2&&np<=16&&np%2===0?np:null)??(spd===null?null:polesFrom(spd))??polesIn(r.sub)??polesIn(ctx);
-    // The model is only ever text printed on the page: the row's name or code, or the product name over the table. Never made up.
-    e.model=clip(modelCol?raw(modelCol):title?.text??'');
-    e.config=clip([...configCols.map(c=>raw(c)),e.un,phase,hz?`${hz} Hz`:'',pl?`${pl}-pole`:''].filter(Boolean).join(', '));
-    e.source=clip(`${file}, page ${page}`);
     const extra:Record<string,string>={},extraEvidence:string[]=[];
     for(const p of plans){
      let v='';
@@ -331,21 +395,33 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
      else for(const t of [...r.cells.map(c=>c.text),r.sub,...context]){const m=t.match(p.shape[0]);if(m){v=p.shape[1](m);break;}}
      if(v){extra[p.param.key]=clip(v);extraEvidence.push(`${p.param.label}: ${v}`);}
     }
+    // A row of the type's table gives at least two of its values and half its required ones.
+    if(as){
+     const has=(p:Param)=>!!(p.feeds?e[p.feeds]:extra[p.key]),req=as.t.params.filter(p=>p.required);
+     if(as.t.params.filter(has).length<2||req.filter(has).length*2<req.length)continue;
+    }
+    // The model is only ever text printed on the page: the row's name or code, or the product name over the table. Never made up.
+    e.model=clip(modelCol?raw(modelCol):title?.text??'');
+    e.config=clip([...configCols.map(c=>raw(c)),e.un,phase,hz?`${hz} Hz`:'',pl?`${pl}-pole`:''].filter(Boolean).join(', '));
+    e.source=clip(`${file}, page ${page}`);
+    if(as)e.type=as.t.id;
     if(Object.keys(extra).length)e.extra=extra;
     // The same table printed twice adds nothing; rows that differ are all kept for the engineer to tell apart.
     const key=JSON.stringify({...e,source:''});if(seen.has(key))continue;seen.add(key);
     if(title)evidence.push(title.box.text);
-    for(const c of [modelCol,...configCols,kw,hp,inA,eff,pf,un,poles,speed])if(c&&raw(c))evidence.push(`${c.head.slice(-2).join(' ')||'?'}: ${raw(c)}`);// the heading lines nearest the numbers
-    if(hpN!==null&&kwN===null)evidence.push(`${raw(hp)} hp = ${e.ratedKw} kW (1 hp = ${HP_KW} kW)`);
-    if(watts&&kwN!==null)evidence.push(`${raw(kw)} W = ${e.ratedKw} kW`);
+    // The heading lines nearest the numbers.
+    for(const c of as?[modelCol,...configCols]:[modelCol,...configCols,kw,hp,inA,eff,pf,un,poles,speed])if(c&&raw(c))evidence.push(`${c.head.slice(-2).join(' ')||'?'}: ${raw(c)}`);
+    evidence.push(...fedEvidence);
+    if(e.ratedKw&&hpN!==null&&kwN===null&&(!as||converted.has('ratedKw')))evidence.push(`${raw(hp)} hp = ${e.ratedKw} kW (1 hp = ${HP_KW} kW)`);
+    if(e.ratedKw&&watts&&kwN!==null&&(!as||converted.has('ratedKw')))evidence.push(`${raw(kw)} W = ${e.ratedKw} kW`);
     if(voltLine&&!un)evidence.push(voltLine);if(hzLine&&hzLine!==voltLine)evidence.push(hzLine);if(r.sub)evidence.push(r.sub);
     const boxes:Box[]=[...used.flatMap(([c,key])=>c&&e[key]?(at.get(c)??[]).map(x=>({key,x0:x.x0,x1:x.x1,y:x.y,h:x.h})):[]),...(title?[{key:'model' as const,x0:title.box.x0,x1:title.box.x1,y:title.box.y,h:title.box.h}]:[])];
     if(worked)evidence.push('kW, In, efficiency and power factor work out to single phase');
     evidence.push(...extraEvidence);
-    const works=implied(v,phase==='1-phase')??0,note=fits(phase==='1-phase')?'':`${e.ratedKw} kW, ${e.inA} A, efficiency ${e.efficiency} and power factor ${e.pf} work out to about ${Math.round(works)} V${phase?` (${phase})`:''}, not ${e.un}. Check In and Un on the page.`;
-    const unverified=[...new Set([...verify(e,evidence.join('\n')).filter(x=>!(x==='ratedKw'&&(kwN===null||watts))),...(e.model?[]:['model' as const]),...(note?['inA','un'] as const:[])])];
+    const works=implied(v,phase==='1-phase')??0,note=fits(phase==='1-phase')||!(e.ratedKw&&e.inA&&e.efficiency&&e.pf)?'':`${e.ratedKw} kW, ${e.inA} A, efficiency ${e.efficiency} and power factor ${e.pf} work out to about ${Math.round(works)} V${phase?` (${phase})`:''}, not ${e.un}. Check In and Un on the page.`;
+    const unverified=[...new Set([...verify(e,evidence.join('\n')).filter(x=>as?!converted.has(x):!(x==='ratedKw'&&(kwN===null||watts))),...(e.model?[]:['model' as const]),...(note?['inA','un'] as const:[])])];
     if(out.length>=5000)throw Error('The document has more than 5,000 entries. Split the file.');
-    out.push({entry:e,page,evidence:evidence.join(' · ').slice(0,300),unverified,include:true,boxes,...(note?{note}:{})});
+    out.push({entry:e,page,evidence:evidence.join(' · ').slice(0,300),unverified,include:true,boxes,...(note?{note}:{}),...(as?.guess?{typeGuess:true}:{})});
    }
   }
  }

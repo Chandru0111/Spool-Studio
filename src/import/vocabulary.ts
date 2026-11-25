@@ -10,13 +10,14 @@ export type Field='kw'|'w'|'hp'|'in'|'un'|'eff'|'pf'|'speed'|'poles'|'name'|'cod
 const WORDS:Record<Field,readonly string[]>={
  kw:['output','rated output','power','rated power','nominal power','shaft power','motor power','leistung','nennleistung','bemessungsleistung','abgabeleistung',
   'puissance','puissance nominale','puissance utile','potencia','potencia nominal','potencia útil','potenza','potenza nominale','potenza resa','potência nominal',
-  'vermogen','nominaal vermogen','moc','moc znamionowa','güç','anma gücü','nominal güç','мощность','номинальная мощность','功率','额定功率','输出功率'],
+  'wattage','vermogen','nominaal vermogen','moc','moc znamionowa','güç','anma gücü','nominal güç','мощность','номинальная мощность','功率','额定功率','输出功率'],
  w:[],
  hp:['horsepower','horse power'],
- in:['current','rated current','nominal current','full load current','full-load current','amps','amperes','fla','flc','strom','nennstrom','bemessungsstrom',
+ in:['current','rated current','nominal current','full load current','full-load current','full load amps','full load amperage','operational current',
+  'rated operational current','amps','amperes','amperage','fla','flc','strom','nennstrom','bemessungsstrom',
   'stromaufnahme','courant','courant nominal','intensité','intensité nominale','corriente','corriente nominal','intensidad','intensidad nominal','corrente',
   'corrente nominale','stroom','nominale stroom','prąd','prąd znamionowy','akım','nominal akım','anma akımı','ток','номинальный ток','电流','额定电流'],
- un:['voltage','rated voltage','nominal voltage','volts','volt','spannung','nennspannung','bemessungsspannung','tension','tension nominale','tensión nominal',
+ un:['voltage','rated voltage','nominal voltage','operational voltage','rated operational voltage','volts','volt','spannung','nennspannung','bemessungsspannung','tension','tension nominale','tensión nominal',
   'voltaje','tensione','tensione nominale','tensão','tensão nominal','spanning','napięcie','gerilim','напряжение','电压','额定电压'],
  eff:['efficiency','eff','effic','wirkungsgrad','rendement','rendimiento','eficiencia','rendimento','efficienza','eficiência','sprawność','verim','кпд','效率'],
  pf:['power factor','pf','p f','cos','cosφ','cos φ','cos phi','cosphi','leistungsfaktor','facteur de puissance','factor de potencia','fattore di potenza',
@@ -82,16 +83,22 @@ const esc=(s:string)=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const PATTERNS=PHRASES.map(p=>({...p,re:HAN.test(p.folded)?new RegExp(esc(p.folded),'g'):new RegExp(` ${esc(p.folded).replace(/ /g,'  ')} `,'g')}));
 
 // How strongly a heading line names each field. Each phrase counts once and uses up its words, so "power factor"
-// does not also count as "power".
-export function fieldsIn(line:string):Map<Field,number> {
+// does not also count as "power". rest: the words no phrase took up.
+function scan(line:string):{fields:Map<Field,number>;rest:string} {
  const raw=unify(line),out=new Map<Field,number>(),add=(f:Field,n:number)=>out.set(f,(out.get(f)??0)+n);
  for(const [f,re] of SIGNS)if(re.test(raw))add(f,1);
  // Spaces are doubled so that neighbouring words each keep the space on both sides that whole-word matching needs.
  let text=fold(raw).replace(/ /g,'  ');
  for(const p of PATTERNS){p.re.lastIndex=0;if(!p.re.test(text))continue;add(p.field,1+0.2*p.folded.split(' ').length);text=text.replace(p.re,'  ');}
- for(const word of text.split(' '))if(word.length>=4&&!/\d/.test(word)){const hit=SINGLE.find(p=>p.folded.startsWith(word)&&p.folded!==word);if(hit)add(hit.field,0.6);}
- return out;
+ const rest:string[]=[];
+ for(const word of text.split(' ')){
+  if(!word)continue;
+  const hit=word.length>=4&&!/\d/.test(word)?SINGLE.find(p=>p.folded.startsWith(word)&&p.folded!==word):undefined;
+  if(hit)add(hit.field,0.6);else rest.push(word);
+ }
+ return {fields:out,rest:rest.join(' ')};
 }
+export const fieldsIn=(line:string):Map<Field,number>=>scan(line).fields;
 
 // The words that head a model, type, part or order number, for readers that find them in running text.
 export const ID_WORDS:readonly string[]=[...WORDS.name,...WORDS.code];
@@ -165,10 +172,39 @@ export function edits(a:string,b:string):number {
 // A printed word x for a label word w: the same, cut short ("Freq.", "Eff."), a plural, or (in a long word) one slip.
 const sameWord=(w:string,x:string)=>w===x||x.length>=3&&w.startsWith(x)||w.length>=4&&x.startsWith(w)&&x.length<=w.length+2||
  Math.min(w.length,x.length)>=7&&edits(w,x)<=(w.length>=10?2:1);
-// Words that say nothing about which parameter it is.
+// Words that say nothing about which parameter it is. A load is said by the load point (loadsIn), not by the name.
 const STOP=new Set(['rated','nominal','max','maximum','min','minimum','typical','typ','approx','approximately','at','of','the','per','and','or','in',
- 'for','with','to','by','on','an']);
-const wordsOf=(s:string)=>fold(s.replace(/\S*\/\S*/g,' ')).trim().split(' ').filter(w=>w.length>1&&!STOP.has(w));
+ 'for','with','to','by','on','an','operational','operating','rating','load','number','value']);
+const FULL_LOAD=LOAD_WORDS.filter(w=>w.v===1);
+const isUnit=(w:string)=>w in UNITS||LOWER.has(w);
+// A ratio's symbols ("Ia/In") name the ratio, not a quantity.
+const noRatio=(s:string)=>s.replace(/\s*\/\s*/g,'/').replace(/\S*\/\S*/g,' ');
+// Quantity symbols printed in a label (In, Ie, Ue, Icu, Ics, IΔn, Ith): a capital I or U and up to three small letters.
+const symbolsOf=(s:string)=>new Set([...unify(noRatio(s)).matchAll(/(?<![\p{L}\d])([IU]Δ?[a-z]{1,3})(?![\p{L}\d])/gu)].map(m=>m[1]!));
+// The words of a label that say which parameter it is: no symbols, units, figures, full-load phrases or stop words.
+// rest: only the words no vocabulary phrase takes up ("busbar" in "Rated busbar current").
+function wordsOf(s:string,rest=false):string[] {
+ const sy=new Set([...symbolsOf(s)].map(x=>fold(x).trim()));
+ let t=` ${rest?scan(noRatio(s)).rest:fold(noRatio(s)).trim()} `.replace(/ /g,'  ');
+ for(const w of FULL_LOAD)t=t.replace(w.re,'  ');
+ return t.trim().split(/\s+/).filter(w=>w.length>1&&!STOP.has(w)&&!sy.has(w)&&!/\d/.test(w)&&!isUnit(w));
+}
+// The quantities a label names (power, current, voltage, frequency…) in any of the vocabulary's words or symbols. A
+// parameter's unit names its quantity when its words do not ("Busbar rating" in A is a current).
+const SAME:Partial<Record<Field,Field>>={w:'kw',hp:'kw'};
+const UNIT_FIELD:Record<string,Field>={W:'kw',A:'in',V:'un',Hz:'hz',kg:'mass',rpm:'speed'};
+function quantities(label:string,unit=''):Set<Field> {
+ const q=new Set([...scan(label).fields.keys()].map(f=>SAME[f]??f)),u=unitOf(unit.trim());
+ if(!q.size&&u&&UNIT_FIELD[u.base])q.add(UNIT_FIELD[u.base]!);
+ return q;
+}
+const bare=(label:string)=>label.replace(/\([^)]*\)|\[[^\]]*\]/g,' ');
+// The one quantity a parameter's label names and nothing else ("Rated output", "Rated current In", "Rated power (normal
+// duty)"), so a column the vocabulary names that quantity is its column; "Input current" or "Busbar rating" say more.
+export function namesQuantity(p:{label:string;unit:string}):Field|undefined {
+ const q=quantities(bare(p.label),p.unit);
+ return q.size===1&&!q.has('skip')&&!wordsOf(bare(p.label),true).length?[...q][0]:undefined;
+}
 // A ratio of two quantities ("Ia/In", "Is/I n", "M m /M n") as the numerator's letter over the denominator: "i/in".
 // A capital I and a small l look alike in most fonts (OCR reads "In" as "ln"), so they count as one letter.
 export const ratioOf=(s:string)=>s.replace(/\s*\/\s*/g,'/').replace(/\b([A-Za-z])\s([a-z0-9]{1,3})\b/g,'$1$2').match(/(?<![A-Za-z])([A-Za-z])[A-Za-z0-9]{0,3}\/([A-Za-z][A-Za-z0-9]{0,3})(?![A-Za-z])/)?.slice(1).join('/').toLowerCase().replace(/l/g,'i')??'';
@@ -181,16 +217,42 @@ export const ratioOf=(s:string)=>s.replace(/\s*\/\s*/g,'/').replace(/\b([A-Za-z]
 // without the shape the parameter's codes have.
 export function nameScore(p:{label:string;unit:string},own:string,head=own,value=''):number {
  const concept=conceptOf(p.label),field=!!concept&&fieldsIn(head).has(concept);
- const want=wordsOf(p.label),have=wordsOf(head),mine=wordsOf(own),ratio=ratioOf(p.label);
- const found=want.filter(w=>have.some(x=>sameWord(w,x))).length,hits=found+(ratio&&(ratioOf(own)===ratio||ratioOf(head)===ratio)?2:0);
- const added=mine.filter(x=>x.length>=3&&!want.some(w=>sameWord(w,x))).length;
- if(!field&&hits-added-(want.length-found)<=0)return 0;
- const unit=unitOf(p.unit.trim()),printed=[...unitsIn(value),...unitsIn(own,true)],agrees=!!unit&&printed.some(u=>u.base===unit.base);
- if(printed.length&&!agrees)return 0;
+ // Words in brackets narrow the parameter ("Rated power (normal duty)", "RCD type (AC / A / F / B)"): they count when
+ // printed, and are missing only when the printed label adds words of its own ("heavy duty").
+ const main=bare(p.label),opt=wordsOf([...p.label.matchAll(/\(([^)]*)\)|\[([^\]]*)\]/g)].map(m=>m[1]??m[2]??'').join(' '));
+ // A symbol names the parameter more surely than words; another symbol of its quantity ("Ics" for "Icu", "Ui" for "Ue")
+ // names another parameter.
+ const symbols=symbolsOf(main),printedSymbols=new Set([...symbolsOf(head),...symbolsOf(own)]),symbolHit=[...symbols].some(s=>printedSymbols.has(s));
+ if(!symbolHit&&[...printedSymbols].some(x=>[...symbols].some(s=>s[0]===x[0])))return 0;
+ const ratio=ratioOf(p.label),bonus=(symbolHit?2:0)+(ratio&&(ratioOf(own)===ratio||ratioOf(head)===ratio)?2:0);
+ const compare=(want:readonly string[],have:readonly string[],mine:readonly string[])=>{
+  const found=want.filter(w=>have.some(x=>sameWord(w,x))).length,optional=opt.filter(w=>have.some(x=>sameWord(w,x))).length;
+  const added=mine.filter(x=>x.length>=3&&!want.some(w=>sameWord(w,x))&&!opt.some(w=>sameWord(w,x))).length;
+  return {found:found+optional,added,missing:want.length-found+(added?opt.length-optional:0)};
+ };
+ // By words: more of the parameter's words found than missing or added, or its symbol printed.
+ const want=wordsOf(main),have=wordsOf(head),w=compare(want,have,wordsOf(own)),hits=w.found+bonus,byWords=hits-w.added-w.missing>0||symbolHit;
+ // By quantity: the label names the same quantities in any of the vocabulary's words ("Rated power" for "Rated output",
+ // "FLA" for "Rated current") and prints every other word of the parameter. It may add one word ("Power consumption"
+ // for "Power") only when it prints all the parameter's own words: "Input power" is not "Rated output".
+ const q=quantities(main,p.unit),printed=quantities(own),qh=printed.size?printed:quantities(head),r=compare(wordsOf(main,true),wordsOf(head,true),wordsOf(own,true));
+ const literal=want.every(x=>have.some(y=>sameWord(x,y)));
+ const byQuantity=q.size>0&&!q.has('skip')&&!qh.has('skip')&&q.size===qh.size&&[...q].every(f=>qh.has(f))&&!r.missing&&(r.added===0||r.added===1&&literal);
+ if(!field&&!byWords&&!byQuantity)return 0;
+ // A unit the vocabulary does not know ("m³/h") agrees when it is printed as the parameter has it.
+ const unit=unitOf(p.unit.trim()),units=[...unitsIn(value),...unitsIn(own,true)],agrees=!!unit&&units.some(u=>u.base===unit.base)||userUnit(p.unit,value);
+ if(units.length&&!agrees)return 0;
  const shape=concept&&SHAPES[concept];
  if(shape&&value&&!shape[0].test(value))return 0;
- return (field?3:0)+hits+(agrees?2:0)+(shape&&value?1:0);
+ return (field?3:0)+Math.max(byWords||field?hits:0,byQuantity?3+r.found+bonus-r.added:0)+(agrees?2:0)+(shape&&value?1:0);
 }
+const userUnit=(unit:string,text:string)=>{const u=unit.trim();return !!u&&!unitOf(u)&&text.includes(u);};
+// The quantity a parameter's unit names on its own, when no word for it is needed: a value in kvar, kVA or lm can only be
+// a reactive power, an apparent power or a luminous flux, whatever its label says. Power, current, voltage, frequency,
+// mass, speed and percentages are printed for many parameters, so they name none.
+export const unitNames=(p:{unit:string}):string|undefined=>{const u=unitOf(p.unit.trim());return u&&u.base!=='%'&&!UNIT_FIELD[u.base]?u.base:undefined;};
+// The quantity a value is printed in ("50 kvar" is var), if any.
+export const unitIn=(text:string):string|undefined=>unitsIn(text)[0]?.base;
 // A parameter's value as printed, in the parameter's unit: "84 lb" for a weight in kg is 38.102, "IP 55" is IP55, "50/60
 // Hz" is 50/60. A value in a unit of another quantity (amps for a ratio) is none. context: the heading the value is
 // printed under, for its unit. was: the value as printed, when it was converted.
@@ -199,8 +261,10 @@ export function valueIn(p:{label:string;unit:string},text:string,context=''):{va
  const concept=conceptOf(p.label),shape=concept&&SHAPES[concept];
  if(shape){const m=t.match(shape[0]);return m?{value:shape[1](m)}:null;}
  const unit=unitOf(p.unit.trim()),printed=unitsIn(t)[0]??unitsIn(context,true)[0];
- if(printed&&printed.base!==unit?.base)return null;
- if(!unit)return {value:/^[-+]?\d+(?:\.\d+)?$/.test(t)?String(Number(t)):t};
+ if(printed&&printed.base!==unit?.base&&!userUnit(p.unit,t))return null;
+ // A unit the vocabulary does not know ("m³/h") is the user's own: printed after the figure, it is not part of the value.
+ const own=p.unit.trim(),bare=!unit&&own&&t.endsWith(own)?t.slice(0,-own.length).trim():t;
+ if(!unit)return {value:/^[-+]?\d+(?:\.\d+)?$/.test(bare)?String(Number(bare)):bare};
  const n=t.match(/\d+(?:\.\d+)?(?:\s*(?:[-–/…]|\.{2,3})\s*\d+(?:\.\d+)?)*/)?.[0].replace(/\s+/g,'').replace(/–|…|\.{2,3}/g,'-');if(!n)return null;
  const size=printed?printed.size/unit.size:1;
  if(size===1)return {value:n};

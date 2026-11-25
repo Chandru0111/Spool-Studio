@@ -101,7 +101,7 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
     {extras.map(x=>{const off=!hasExtra(p,x.key),need=!off&&missing(p,'',x.key);return <td key={x.key} class={`cell ${need?'bad':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not have this parameter.`:need?'Required for this equipment type. Type it from the datasheet.':undefined}>
      <input value={off?'':p.entry.extra?.[x.key]??''} disabled={off} aria-label={`${x.label}, row ${i+1}`} maxLength={MAX_CELL} onInput={e=>editExtra(i,x.key,e.currentTarget.value)}/></td>;})}
     <td>{p.page&&read.pdf?<button class="text-button" title="Show where these values are on the page" onClick={()=>setView(i)}>p. {p.page}</button>:p.page||'—'}</td><td class="evidence" title={p.note?`${p.note} ${p.evidence}`:p.evidence}>{p.note?`⚠ ${p.note} `:''}{p.evidence}</td></tr>;})}</tbody></table>
-   {!rows.length&&<p class="sheet-empty">No labelled values found (rated power in kW, current in A, voltage, efficiency or power factor next to a model or article number). Add a row and type the values from the PDF.</p>}</div>
+   {!rows.length&&<p class="sheet-empty">No values found for the picked equipment types' parameters. Check the types and parameters picked, or add a row and type the values from the PDF.</p>}</div>
   <div class="modal-actions"><span class="muted">{picked.length} to add{unchecked?` · ${unchecked} values to check`:''}{guesses?` · ${guesses} types to check`:''}</span>
    <label class="check-inline muted"><input type="checkbox" checked={only} onChange={e=>{setOnly(e.currentTarget.checked);setFrom(0);}}/>Only rows to check</label>
    {list.length>PAGE&&<span class="pager"><button class="button ghost small" disabled={!from} onClick={()=>setFrom(Math.max(0,from-PAGE))}>Previous</button><span class="muted">Rows {from+1}–{last} of {list.length}</span><button class="button ghost small" disabled={last>=list.length} onClick={()=>setFrom(from+PAGE)}>Next</button></span>}
@@ -178,7 +178,7 @@ export function Catalogue() {
   catch(e){notify(message(e,'Could not read the catalogue.'));}finally{setBusy('');if(book.current)book.current.value='';}
  }
  function fromWeb(text:string,source:string){
-  const r=catalogueFromWeb(text,source,chosen.current.flatMap(t=>t.params));setPasting(false);
+  const r=catalogueFromWeb(text,source,chosen.current);setPasting(false);
   setRead({file:source,pages:[{page:1,text,mode:'text',confidence:null}],ocr:0,proposals:applyPick(r.proposals,chosen.current),brand:brand||r.brand,types:chosen.current});
  }
  // pages: the pages picked; null when the engineer chose to read them all.
@@ -190,7 +190,7 @@ export function Catalogue() {
    fromWeb(pageText(html),f.name);return;}
    // A PDF of more than one page: the engineer picks the pages to read first.
    if(/\.pdf$/i.test(f.name)&&pages===undefined){const total=await pageCount(f);if(total>1){setPicking({file:f,total});return;}}
-   const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment',pages??undefined),r=catalogueFromDatasheet(doc.pages,f.name,doc.layout,doc.rules,chosen.current.flatMap(t=>t.params));
+   const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment',pages??undefined),r=catalogueFromDatasheet(doc.pages,f.name,doc.layout,doc.rules,chosen.current);
    setRead({file:f.name,pages:doc.pages,ocr:doc.pages.filter(p=>p.mode==='ocr').length,proposals:applyPick(r.proposals,chosen.current),brand:brand||r.brand,types:chosen.current,...(/\.pdf$/i.test(f.name)?{pdf:f,layout:doc.layout}:{})});}
   catch(e){notify(message(e,'Could not read the datasheet.'));}finally{setBusy('');stop.current=null;if(pdf.current)pdf.current.value='';}
  }
