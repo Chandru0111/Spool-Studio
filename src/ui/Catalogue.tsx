@@ -81,11 +81,13 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
  const extras=[...new Map(read.types.flatMap(t=>t.params.filter(x=>!x.feeds).map(x=>[x.key,x] as const))).values()];
  const hasExtra=(p:Proposal,key:string)=>!!typeOf(p)?.params.some(x=>x.key===key&&!x.feeds);
  const missing=(p:Proposal,feeds:string,key='')=>{const x=typeOf(p)?.params.find(q=>q.required&&(key?q.key===key:q.feeds===feeds));return !!x&&!(x.feeds?p.entry[x.feeds]:p.entry.extra?.[x.key]??'').trim();};
+ const missingRequired=(p:Proposal)=>typeOf(p)?.params.filter(q=>q.required&&!(q.feeds?p.entry[q.feeds]:p.entry.extra?.[q.key])?.trim()).length??0;
+ const missingCount=picked.reduce((n,p)=>n+missingRequired(p),0);
  const unchecked=picked.reduce((a,p)=>a+p.unverified.filter(k=>takes(p,k)).length,0),guesses=picked.filter(p=>p.typeGuess).length,doubts=picked.filter(p=>p.doubt).length;
  // A catalogue can give thousands of rows: show them a page at a time so typing stays quick.
  // "Only rows to check" lists the rows with a red value (a model missing, a value not on its page, values that do not add up),
  // an amber one (values that do not work out with each other) or a type that two picked types fit equally.
- const list=rows.map((p,i)=>({p,i})).filter(x=>!only||x.p.unverified.length||x.p.typeGuess||x.p.doubt);
+ const list=rows.map((p,i)=>({p,i})).filter(x=>!only||x.p.unverified.length||x.p.typeGuess||x.p.doubt||missingRequired(x.p));
  const PAGE=200,last=Math.min(from+PAGE,list.length),all=rows.length>0&&picked.length===rows.length;
  // A value the engineer typed is theirs: it is no longer flagged as unchecked. Its row's sums are worked out again.
  const change=(i:number,f:(p:Proposal)=>Proposal)=>setRead({...read,proposals:rows.map((p,j)=>{if(j!==i)return p;const n=f(p);return withCheck(n,typeOf(n));})});
@@ -131,7 +133,7 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
      <input value={off?'':p.entry.extra?.[x.key]??''} disabled={off} aria-label={`${x.label}, row ${i+1}`} maxLength={MAX_CELL} onInput={e=>editExtra(i,x.key,e.currentTarget.value)}/></td>;})}
     <td>{p.page&&read.pdf?<button class="text-button" title="Show where these values are on the page" onClick={()=>setView(i)}>p. {p.page}</button>:p.page||'—'}</td><td class="evidence" title={[p.note,p.doubt?.why,p.evidence].filter(Boolean).join(' ')}>{p.note?`⚠ ${p.note} `:''}{p.doubt?`⚠ ${p.doubt.why} `:''}{p.evidence}</td></tr>;})}</tbody></table>
    {!rows.length&&<p class="sheet-empty">No values found for the picked equipment types' parameters. Check the types and parameters picked, or add a row and type the values from the PDF.</p>}</div>
-  <div class="modal-actions"><span class="muted">{picked.length} to add{unchecked?` · ${unchecked} values to check`:''}{guesses?` · ${guesses} types to check`:''}{doubts?` · ${doubts} row${doubts===1?'':'s'} not adding up`:''}</span>
+  <div class="modal-actions"><span class="muted">{picked.length} to add{missingCount?` · ${missingCount} required values missing`:''}{unchecked?` · ${unchecked} values to check`:''}{guesses?` · ${guesses} types to check`:''}{doubts?` · ${doubts} row${doubts===1?'':'s'} not adding up`:''}</span>
    <label class="check-inline muted"><input type="checkbox" checked={only} onChange={e=>{setOnly(e.currentTarget.checked);setFrom(0);}}/>Only rows to check</label>
    {list.length>PAGE&&<span class="pager"><button class="button ghost small" disabled={!from} onClick={()=>setFrom(Math.max(0,from-PAGE))}>Previous</button><span class="muted">Rows {from+1}–{last} of {list.length}</span><button class="button ghost small" disabled={last>=list.length} onClick={()=>setFrom(from+PAGE)}>Next</button></span>}
    <button class="button secondary small" onClick={()=>setRead({...read,proposals:[...rows,{entry:{...emptyEntry(),source:clip(`${read.file} (typed)`),...read.types[0]?{type:read.types[0].id}:{}},page:0,evidence:'',unverified:[],include:true}]})}><Plus size={14}/>Add row</button>

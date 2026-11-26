@@ -12,7 +12,9 @@
 // <name>.json beside <name>.pdf:
 //   {"types":["hv-transformer"],"pages":[1],"confirmed":true,"rows":[{"model":"","un":"400 V","inA":"3608.44","rated-power":"2500"}]}
 // Row keys are load list columns (model, config, ratedKw, protA, inA, un, efficiency, pf) or a type's parameter keys; a
-// value of "" means the reader must leave it empty. A row with a model is matched by it; otherwise rows go in order.
+// value of "" means the reader must leave it empty, and a list of values that any of them is right (a sheet printing an
+// order number and a type code). A row with a model is matched by it, without credit for values belonging to another model. Rows without an identifying field use print order.
+// Optional matchBy names the columns identifying a configuration, e.g. ["rated-power"] in a transformer schedule.
 // Scanned pages need the browser's OCR and are not benched.
 import {build} from 'esbuild';
 import {mkdirSync,readFileSync,readdirSync,existsSync,writeFileSync} from 'node:fs';
@@ -54,9 +56,13 @@ async function proposals(file,spec){
  return {...r,rows:reader.checkAll(reader.applyPick(reader.catalogueFromDatasheet(r.pages,basename(file),r.layout,r.rules,types).proposals,types),types),types};
 }
 const valueOf=(p,k)=>(COLUMNS.includes(k)?p?.entry[k]:p?.entry.extra?.[k])??'';
-// Same value: as numbers when both are one figure (units aside: "400 V" is 400), else as text, case and spaces aside.
-const figure=(v)=>{const m=/^([+-]?\d+(?:\.\d+)?)\s*[^\d\s]*$/.exec(v.trim());return m?Number(m[1]):null;};
-const same=(a,b)=>{const x=figure(a),y=figure(b);return x!==null&&y!==null?Math.abs(x-y)<=1e-9*Math.max(1,Math.abs(x)):a.replace(/\s+/g,'').toLowerCase()===b.replace(/\s+/g,'').toLowerCase();};
+// Numbers can differ in formatting, but the units and model identifiers must still agree.
+const numeric = /^([+-]?\d+(?:\.\d+)?)\s*([A-Za-z%]*)$/;
+const same = (a, b) => {
+ const x = numeric.exec(a.trim()), y = numeric.exec(b.trim());
+ return x && y && x[2] === y[2] ? Number(x[1]) === Number(y[1]) :
+  a.replace(/\s+/g,'').toLowerCase() === b.replace(/\s+/g,'').toLowerCase();
+};
 
 const pdfs=readdirSync(folder).filter(f=>/\.pdf$/i.test(f)).sort();
 if(!pdfs.length){console.log(`No PDFs in ${folder}.`);process.exit(0);}
@@ -73,16 +79,22 @@ for(const name of pdfs){
  }
  const spec=JSON.parse(readFileSync(json,'utf8'));
  if(!spec.confirmed){console.log(`${name}: ${basename(json)} is not confirmed yet; skipped.`);continue;}
- const {rows,scanned}=await proposals(file,spec),misses=[];let n=0,ok=0;
+ const {rows,scanned}=await proposals(file,spec),misses=[],matched=new Set();let n=0,ok=0;
+ const any=(got,v,key)=>[v].flat().some(x=>key==='model'||key==='config'
+  ? got.replace(/\s+/g,'').toLowerCase()===String(x).replace(/\s+/g,'').toLowerCase()
+  : same(got,String(x)));
  (spec.rows??[]).forEach((want,i)=>{
-  const p=(want.model?rows.find(r=>same(r.entry.model,want.model)):undefined)??rows[i];
+  const identifiers = spec.matchBy ?? (want.model ? ['model'] : []);
+  const p = identifiers.length ? rows.find(r => r.include && !matched.has(r) &&
+   identifiers.every(k => Object.hasOwn(want,k) && any(valueOf(r,k),want[k],k))) : rows.filter(r=>r.include&&!matched.has(r))[0];
+  if(p) matched.add(p);
   for(const [k,v] of Object.entries(want)){
-   const got=valueOf(p,k),hit=same(got,String(v)),s=byKey.get(k)??{right:0,total:0};
-   n++;s.total++;if(hit){ok++;s.right++;}else misses.push(`  ✗ ${want.model||`row ${i+1}`} ${k}: expected "${v}", read "${got}"`);byKey.set(k,s);
+   const got=valueOf(p,k),hit=!!p&&any(got,v,k),s=byKey.get(k)??{right:0,total:0};
+   n++;s.total++;if(hit){ok++;s.right++;}else misses.push(`  ✗ ${[want.model].flat()[0]||`row ${i+1}`} ${k}: expected "${[v].flat().join('" or "')}", read "${p?got:'no matching row'}"`);byKey.set(k,s);
   }
  });
  const amber=rows.filter(r=>r.doubt).length,red=rows.reduce((a,r)=>a+r.unverified.length,0);
- console.log(`${name}: ${ok}/${n} right · ${rows.length} row${rows.length===1?'':'s'} read · ${amber} not adding up · ${red} red${scanned.length?` · pages ${scanned.join(', ')} are scans, not benched`:''}`);
+ console.log(`${name}: ${ok}/${n} right · ${rows.length} row${rows.length===1?'':'s'} read · ${matched.size}/${spec.rows.length} expected rows matched · ${amber} not adding up · ${red} red${scanned.length?` · pages ${scanned.join(', ')} are scans, not benched`:''}`);
  for(const m of misses)console.log(m);
  for(const r of rows.filter(r=>r.doubt))console.log(`  ⚠ ${r.entry.model||'(no model)'}: ${r.doubt.why}`);
  right+=ok;total+=n;wrong+=n-ok;

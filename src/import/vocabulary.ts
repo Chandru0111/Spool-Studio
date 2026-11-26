@@ -5,7 +5,7 @@
 // "A" and "In" are amps, the word "a" or "in" in a sentence is not.
 // hz, mass, ip and ie name a parameter a catalogue prints beside the load data (supply frequency, weight, IP code,
 // efficiency class); the load-data readers treat them as not load data.
-export type Field='kw'|'w'|'hp'|'in'|'un'|'eff'|'pf'|'speed'|'poles'|'name'|'code'|'frame'|'hz'|'mass'|'ip'|'ie'|'skip';
+export type Field='kw'|'w'|'hp'|'in'|'un'|'eff'|'pf'|'speed'|'poles'|'name'|'code'|'frame'|'hz'|'mass'|'ip'|'ie'|'uk'|'skip';
 
 const WORDS:Record<Field,readonly string[]>={
  kw:['output','rated output','power','rated power','nominal power','shaft power','motor power','leistung','nennleistung','bemessungsleistung','abgabeleistung',
@@ -47,6 +47,9 @@ const WORDS:Record<Field,readonly string[]>={
   'energieeffizienzklasse','classe de rendement','clase de eficiencia','classe di efficienza','classe de rendimento','rendementsklasse','klasa sprawności',
   'verimlilik sınıfı','класс энергоэффективности','能效等级'],
  // Not load data: starting and no-load values, ratios, torque, inertia, weight, noise, classes, sizes, prices, pump duty.
+ // A transformer's short-circuit impedance (impedance voltage), printed uk or uz.
+ uk:['impedance','short circuit impedance','impedance voltage','short circuit voltage','uk','uz','kurzschlussspannung','impedanz',
+  'tension de court circuit','impédance','impedancia','impedenza','impedantie','impedancja','empedans','напряжение короткого замыкания','阻抗','短路阻抗'],
  skip:['torque','starting','start','locked','locked rotor','no load','idle','ratio','inertia','moment of inertia','noise','sound',
   'sound pressure','pressure','slip','temperature','temp','class','insulation','bearing','bearings','dimension','dimensions','price','qty','quantity',
   'limit','minimum','rotor','flow','head','lra','breakdown','pull out','pull up','drehmoment','moment','anlauf','anzug','leerlauf','trägheitsmoment',
@@ -145,7 +148,7 @@ export function loadsIn(text:string,bare=false):number[] {
 // other capitals ("KW", "Kg"), single letters only as printed ("A" is amps, "a" is not).
 const UNITS:Record<string,readonly [string,number]>={W:['W',1],kW:['W',1e3],MW:['W',1e6],hp:['W',745.7],VA:['VA',1],kVA:['VA',1e3],MVA:['VA',1e6],
  var:['var',1],kvar:['var',1e3],Mvar:['var',1e6],A:['A',1],mA:['A',1e-3],kA:['A',1e3],V:['V',1],kV:['V',1e3],Hz:['Hz',1],kHz:['Hz',1e3],
- kg:['kg',1],g:['kg',1e-3],t:['kg',1e3],lb:['kg',0.45359237],lbs:['kg',0.45359237],rpm:['rpm',1],'r/min':['rpm',1],'min-1':['rpm',1],'1/min':['rpm',1],
+ VAC:['V',1],VDC:['V',1],kg:['kg',1],g:['kg',1e-3],t:['kg',1e3],lb:['kg',0.45359237],lbs:['kg',0.45359237],rpm:['rpm',1],'r/min':['rpm',1],'min-1':['rpm',1],'1/min':['rpm',1],
  '%':['%',1],s:['s',1],ms:['s',1e-3],min:['s',60],h:['s',3600],mm:['m',1e-3],cm:['m',1e-2],m:['m',1],Nm:['Nm',1],kNm:['Nm',1e3],dB:['dB',1],
  'dB(A)':['dB',1],lm:['lm',1],'lm/W':['lm/W',1],'l/h':['l/h',1],'°C':['°C',1]};
 const LOWER=new Map(Object.keys(UNITS).filter(u=>u.length>1).map(u=>[u.toLowerCase(),u] as const));
@@ -174,9 +177,10 @@ export function edits(a:string,b:string):number {
 const ALIKE:readonly (readonly string[])[]=[['hv','high'],['lv','low'],['mv','medium'],['standard','standards','specs','spec','specification']];
 const sameWord=(w:string,x:string)=>w===x||x.length>=3&&w.startsWith(x)||w.length>=4&&x.startsWith(w)&&x.length<=w.length+2||
  Math.min(w.length,x.length)>=7&&edits(w,x)<=(w.length>=10?2:1)||ALIKE.some(g=>g.includes(w)&&g.includes(x));
-// Words that say nothing about which parameter it is.
+// Words that say nothing about which parameter it is; a standard's name ("IEC" over kW and Ie, "UL/CSA" over hp) says
+// which standard the values are given under.
 const STOP=new Set(['rated','nominal','max','maximum','min','minimum','typical','typ','approx','approximately','at','of','the','per','and','or','in',
- 'for','with','to','by','on','an','operational','operating','rating','number','value','type']);
+ 'for','with','to','by','on','an','operational','operating','rating','number','value','type','iec','ul','csa','nema']);
 // A load point says where a value is taken, which the readers handle (loadsIn), so it is no word of the name: full load
 // and "75 % load" drop out. No load stays one word, so "No-load losses" are not "Load losses".
 const AT_LOAD=new RegExp(`(?:\\d{2,3}\\s*%|[1-8]\\s*\\/\\s*[1-8])\\s*(?:of\\s+)?(?:rated\\s+|full\\s+)?(?:${LOAD_NOUNS})`,'giu');
@@ -202,8 +206,9 @@ function wordsOf(s:string,rest=false):string[] {
 // parameter's unit names its quantity when its words do not ("Busbar rating" in A is a current).
 const SAME:Partial<Record<Field,Field>>={w:'kw',hp:'kw'};
 const UNIT_FIELD:Record<string,Field>={W:'kw',A:'in',V:'un',Hz:'hz',kg:'mass',rpm:'speed'};
+// A model or code word ("Power type rating") names what the product is called, not a quantity.
 function quantities(label:string,unit=''):Set<Field> {
- const q=new Set([...scan(label).fields.keys()].map(f=>SAME[f]??f)),u=unitOf(unit.trim());
+ const q=new Set([...scan(label).fields.keys()].filter(f=>f!=='name'&&f!=='code').map(f=>SAME[f]??f)),u=unitOf(unit.trim());
  if(!q.size&&u&&UNIT_FIELD[u.base])q.add(UNIT_FIELD[u.base]!);
  return q;
 }
@@ -216,7 +221,15 @@ export function namesQuantity(p:{label:string;unit:string}):Field|undefined {
 }
 // A ratio of two quantities ("Ia/In", "Is/I n", "M m /M n") as the numerator's letter over the denominator: "i/in".
 // A capital I and a small l look alike in most fonts (OCR reads "In" as "ln"), so they count as one letter.
-export const ratioOf=(s:string)=>s.replace(/\s*\/\s*/g,'/').replace(/\b([A-Za-z])\s([a-z0-9]{1,3})\b/g,'$1$2').match(/(?<![A-Za-z])([A-Za-z])[A-Za-z0-9]{0,3}\/([A-Za-z][A-Za-z0-9]{0,3})(?![A-Za-z])/)?.slice(1).join('/').toLowerCase().replace(/l/g,'i')??'';
+export function ratioOf(s:string):string {
+ // A PDF can place the two subscripts on a separate line beneath I/I.
+ const joined=s.replace(/\b([IT])\s*\/\s*([IT])\s*\n\s*([A-Za-z])\s+([A-Za-z])\b/g,'$1$3/$2$4')
+  .replace(/\b([IT])\s+([a-zA-Z])\s*\/\s*([IT])\s+([a-zA-Z])\b/g,'$1$2/$3$4');
+ const ratio=joined.match(/(?<![A-Za-z])([A-Za-z][A-Za-z0-9]{0,3})\s*\/\s*([A-Za-z][A-Za-z0-9]{0,3})(?![A-Za-z])/);
+ if(!ratio)return '';
+ // Starting current over rated current is printed Ia/In, Is/In, Ist/In, Il/In (locked rotor) or II/IN (IEC 60034-1).
+ return (ratio[1]+'/'+ratio[2]).toLowerCase().replace(/\bl(?=[ans]\b)/g,'i').replace(/^i(?:a|s|st|l|i)\/in$/,'ia/in');
+}
 
 // How surely a printed label names a parameter, 0 when it does not. own: the label, or the heading over a table column
 // alone; head: with the lines spanning it; value: what is printed beside the label. A label names the parameter by the
@@ -235,14 +248,15 @@ export function nameScore(p:{label:string;unit:string;labels?:readonly string[]}
  // names another parameter.
  const symbols=symbolsOf(main),printedSymbols=new Set([...symbolsOf(head),...symbolsOf(own)]),symbolHit=[...symbols].some(s=>printedSymbols.has(s));
  if(!symbolHit&&[...printedSymbols].some(x=>[...symbols].some(s=>s[0]===x[0])))return 0;
- const ratio=ratioOf(p.label),bonus=(symbolHit?2:0)+(ratio&&(ratioOf(own)===ratio||ratioOf(head)===ratio)?2:0);
+ // A ratio printed alone over a column ("IA/IN") names the parameter it is the symbol of ("Starting current Ia/In").
+ const ratio=ratioOf(p.label),ratioHit=!!ratio&&(ratioOf(own)===ratio||ratioOf(head)===ratio),bonus=(symbolHit?2:0)+(ratioHit?2:0);
  const compare=(want:readonly string[],have:readonly string[],mine:readonly string[])=>{
   const found=want.filter(w=>have.some(x=>sameWord(w,x))).length,optional=opt.filter(w=>have.some(x=>sameWord(w,x))).length;
   const added=mine.filter(x=>x.length>=3&&!want.some(w=>sameWord(w,x))&&!opt.some(w=>sameWord(w,x))).length;
   return {found:found+optional,added,missing:want.length-found+(added?opt.length-optional:0)};
  };
  // By words: more of the parameter's words found than missing or added, or its symbol printed.
- const want=wordsOf(main),have=wordsOf(head),w=compare(want,have,wordsOf(firm(own))),hits=w.found+bonus,byWords=hits-w.added-w.missing>0||symbolHit;
+ const want=wordsOf(main),have=wordsOf(head),w=compare(want,have,wordsOf(firm(own))),hits=w.found+bonus,byWords=hits-w.added-w.missing>0||symbolHit||ratioHit&&!w.added;
  // By quantity: the label names the same quantities in any of the vocabulary's words ("Rated power" for "Rated output",
  // "FLA" for "Rated current") and prints every other word of the parameter. It may add one word ("Power consumption"
  // for "Power") only when it prints all the parameter's own words: "Input power" is not "Rated output".
@@ -250,25 +264,33 @@ export function nameScore(p:{label:string;unit:string;labels?:readonly string[]}
  const literal=want.every(x=>have.some(y=>sameWord(x,y)));
  const byQuantity=q.size>0&&!q.has('skip')&&!qh.has('skip')&&q.size===qh.size&&[...q].every(f=>qh.has(f))&&!r.missing&&(r.added===0||r.added===1&&literal);
  if(!field&&!byWords&&!byQuantity)return 0;
- // A unit the vocabulary does not know ("m³/h") agrees when it is printed as the parameter has it.
- const unit=unitOf(p.unit.trim()),units=[...unitsIn(value),...unitsIn(own,true)],agrees=!!unit&&units.some(u=>u.base===unit.base)||userUnit(p.unit,value);
+ // A unit the vocabulary does not know ("m³/h") agrees when it is printed as the parameter has it. A note in brackets
+ // beside the value ("0.99 (THDi < 5 %)", "110-300 VAC (160-300 @100%)") is not the value.
+ const unit=unitOf(p.unit.trim()),units=[...unitsIn(noted(value)),...unitsIn(own,true)],agrees=!!unit&&units.some(u=>u.base===unit.base)||userUnit(p.unit,value);
  if(units.length&&!agrees)return 0;
  const shape=concept&&SHAPES[concept];
  if(shape&&value&&!shape[0].test(value))return 0;
+ // Frequency, weight, speed, poles and frame size are figures: "Frame material  aluminum" is no frame size.
+ if(concept&&!shape&&value&&!/\d/.test(value))return 0;
  return (field?3:0)+Math.max(byWords||field?hits:0,byQuantity?3+r.found+bonus-r.added:0)+(agrees?2:0)+(shape&&value?1:0);
 }
+// A value without the note in brackets printed beside it, when a figure is left.
+const noted=(v:string)=>{const out=v.replace(/\s*(?:\([^)]*\)|\[[^\]]*\])/g,' ').replace(/\s+/g,' ').trim();return /\d/.test(out)?out:v;};
 const userUnit=(unit:string,text:string)=>{const u=unit.trim();return !!u&&!unitOf(u)&&text.includes(u);};
 // The quantity a parameter's unit names on its own, when no word for it is needed: a value in kvar, kVA or lm can only be
 // a reactive power, an apparent power or a luminous flux, whatever its label says. Power, current, voltage, frequency,
 // mass, speed and percentages are printed for many parameters, so they name none.
-export const unitNames=(p:{unit:string}):string|undefined=>{const u=unitOf(p.unit.trim());return u&&u.base!=='%'&&!UNIT_FIELD[u.base]?u.base:undefined;};
+// Times, lengths, temperatures and levels are printed for many parameters too (switchover time, charging time, autonomy).
+const SELF=new Set(['var','VA','lm','lm/W','l/h']);
+export const unitNames=(p:{unit:string}):string|undefined=>{const u=unitOf(p.unit.trim());return u&&SELF.has(u.base)?u.base:undefined;};
 // The quantity a value is printed in ("50 kvar" is var), if any.
 export const unitIn=(text:string):string|undefined=>unitsIn(text)[0]?.base;
 // A parameter's value as printed, in the parameter's unit: "84 lb" for a weight in kg is 38.102, "IP 55" is IP55, "50/60
 // Hz" is 50/60. A value in a unit of another quantity (amps for a ratio) is none. context: the heading the value is
 // printed under, for its unit. was: the value as printed, when it was converted.
 export function valueIn(p:{label:string;unit:string},text:string,context=''):{value:string;was?:string}|null {
- const t=text.trim().replace(/(\d),(\d)/g,'$1.$2');if(!t)return null;
+ // A unit printed after each figure of a dual rating ("220 VAC / 230 VAC / 240 VAC") is printed once: 220/230/240 VAC.
+ const t=noted(text).trim().replace(/^note\.?\s*\d+\b[\s:;]*/i,'').replace(/(\d)\s+to\s+(?=\d)/gi,'$1-').replace(/(\d),(\d)/g,'$1.$2').replace(/(\d)\s*([A-Za-z]{1,4})\s*\/\s*(?=\d[\d.]*\s*\2(?![A-Za-z]))/g,'$1/');if(!t)return null;
  const concept=conceptOf(p.label),shape=concept&&SHAPES[concept];
  if(shape){const m=t.match(shape[0]);return m?{value:shape[1](m)}:null;}
  const unit=unitOf(p.unit.trim()),printed=unitsIn(t)[0]??unitsIn(context,true)[0];

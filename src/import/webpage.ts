@@ -3,7 +3,8 @@ import {FROM_CATALOGUE,emptyEntry,type CatalogueKey,type CatalogueRow} from '../
 import type {PageEvidence} from '../store/schema';
 import {asFraction,catalogueFromPages,dot,group,inColumn,reading,verify,type Box,type Proposal} from './equipment';
 import type {PositionedLine,Rule} from './parse';
-import {catalogueFromTables} from './rating-table';
+import {catalogueFromTables,tellApart} from './rating-table';
+import {sideBySide} from './spec-columns';
 import type {EquipmentType,Param} from '../engine/equipment-types';
 import {SHAPES,conceptOf,loadsIn,nameScore,unitIn,unitNames,unitOf,valueIn} from './vocabulary';
 import {checkRow} from './checks';
@@ -144,6 +145,13 @@ type Raw={label:string;value:string;line:string;load?:Load;section?:string};
 // load its value is at; one naming several ("Efficiency 100 / 75 / 50 %") gives a value for each, and only the one at full
 // load is taken.
 function atLoad(name:string,values:readonly string[]):{value:string;load?:Load} {
+ const runtime=/\b(?:backup time|back-up time|runtime|autonomy)\b/i.test(name);
+ if(runtime && /\b(?:minutes?|min)\b/i.test(name) && /\binternal batter/i.test(name)){
+  const order=/\b(full|half)\s*\/\s*(full|half)\s+load\b/i.exec(name);
+  const pair=/^\s*(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)\s*$/.exec(values.join(' '));
+  if(order&&pair&&order[1]!.toLowerCase()!==order[2]!.toLowerCase())
+   return {value:pair[order[1]!.toLowerCase()==='full'?1:2]+' min',load:'full'};
+ }
  const loads=loadsIn(name),each=values.length>1?values:values[0]?.match(/\d+(?:[.,]\d+)?\s*%?/g)??[];
  if(loads.length>1&&each.length===loads.length){const j=loads.indexOf(1);return j<0?{value:'',load:'part'}:{value:each[j]!,load:'full'};}
  const value=values[0]??'';
@@ -168,7 +176,11 @@ function candidates(lines:readonly string[],skip:ReadonlySet<number>,loose=false
   if(skip.has(i))return;
   const one=line.trim();
   if(!line.includes('\t')&&lines[i+1]?.includes('\t')&&/\p{L}/u.test(one)&&!/\d/.test(one)&&one.split(/\s+/).length<=6&&!/[.:]$/.test(one)&&!FIELDS.has(label(one))){section=one;return;}
-  const cells=line.split('\t'),tail=cells[0]&&!point(cells[0])?cells.slice(1):cells;
+  // A cell printing its own label and value ("Motor type : 1AV3163A") is two cells; one starting with the colon
+  // (": -20 °C") is the value of the label before it.
+  const split=line.split('\t'),cells=split.length<2?split:split.flatMap((c,k)=>{const m=c.match(/^([^:]{1,60}?)\s*:\s+(\S.*)$/u);
+   return m&&/\p{L}/u.test(m[1]!)&&!/https?$/i.test(m[1]!)?[m[1]!,m[2]!]:k&&/^:\s/.test(c)?[c.replace(/^:\s*/,'')]:[c];});
+  const tail=cells[0]&&!point(cells[0])?cells.slice(1):cells;
   if(tail.length>=2&&tail.every(point)){points=tail.map(c=>loadsIn(c)[0]!);return;}
   if(points&&cells.length===points.length+1){const j=points.indexOf(1);out.push({label:cells[0]!,value:j<0?'':cells[j+1]!,line,load:j<0?'part':'full'});return;}
   points=null;
@@ -204,9 +216,21 @@ function paramsOf(text:string,params:readonly Param[]):{got:Map<string,Got>;ties
  const raw=candidates(lines,used,true).filter(r=>r.value.trim());
  // A value at part load is taken only for a parameter named at that load ("No-load losses", "Efficiency at 3/4 load").
  const at=(p:Param,r:Raw)=>{const want=loadsIn(p.label);if(want.length!==1)return r.load!=='part';const got=loadsIn(r.label);return got.length===1&&got[0]===want[0];};
+ // Use other printed measurements to distinguish a grouping comma from a decimal comma.
+ const decimalPoint=raw.some(r=>/(?:^|[^\d.,])\d+\.\d{1,2}(?![\d.,])\s*(?:$|[a-zA-Z%])/.test(r.value));
+ const decimalComma=raw.some(r=>/(?:^|[^\d.,])\d+,\d{1,2}(?![\d.,])\s*(?:$|[a-zA-Z%])/.test(r.value));
+ const readValue=(p:Param,r:Raw)=>{
+  let value=r.value;
+  if(p.unit&&/(?<![\d.,])[1-9]\d{0,2}(?:,\d{3})+(?![.,\d])/.test(value)){
+   if(decimalPoint===decimalComma)return null;
+   if(decimalPoint)value=value.replace(/(?<![\d.,])[1-9]\d{0,2}(?:,\d{3})+(?![.,\d])/g,m=>m.replace(/,/g,''));
+  }
+  return valueIn(reading(p),value,r.label);
+ };
  const fits=params.flatMap(p=>p.label.trim()?raw.flatMap((r,i)=>{
   if(!at(p,r))return [];
-  const s=nameScore(p,r.label,r.section?`${r.section}\n${r.label}`:r.label,r.value),v=s>0?valueIn(reading(p),r.value,r.label):null;
+  const runtime=p.label.toLowerCase()==='autonomy'&&r.load==='full'&&/internal batter/i.test(r.label)&&/\b(?:backup time|back-up time|runtime|autonomy)\b/i.test(r.label);
+  const s=runtime?8:nameScore(p,r.label,r.section?`${r.section}\n${r.label}`:r.label,r.value),v=s>0?readValue(p,r):null;
   return v&&(!p.feeds||inColumn(p.feeds,v.value))?[{p,i,s:s+(r.load==='full'?0.5:0),v,r}]:[];
  }):[]).sort((a,b)=>b.s-a.s);
  const got=new Map<string,Got>(),ties=new Map<string,Got[]>(),taken=new Set<number>(),settled=new Set<string>();
@@ -221,11 +245,15 @@ function paramsOf(text:string,params:readonly Param[]):{got:Map<string,Got>;ties
   if(got.has(p.key)||!p.label.trim())continue;
   // A unit that names its quantity on its own (kvar, kVA, lm) printed with only one value names that value's parameter.
   const base=unitNames(p),alone=base?raw.flatMap((r,i)=>!taken.has(i)&&at(p,r)&&unitIn(r.value)===base?[{r,i}]:[]):[];
-  if(alone.length===1){const {r,i}=alone[0]!,v=valueIn(reading(p),r.value,r.label);if(v){taken.add(i);got.set(p.key,{...v,printed:r.value,label:r.label});continue;}}
+  if(alone.length===1){const {r,i}=alone[0]!,v=readValue(p,r);if(v){taken.add(i);got.set(p.key,{...v,printed:r.value,label:r.label});continue;}}
   if(p.feeds)continue;
   const concept=conceptOf(p.label),shape=concept&&SHAPES[concept];
   if(shape){const only=[...new Set([...text.matchAll(new RegExp(shape[0].source,`${shape[0].flags}g`))].map(shape[1]))];
    if(only.length===1){got.set(p.key,{value:only[0]!,printed:only[0]!,label:p.label});continue;}}
+  if(concept==='frame'){
+   const frames=[...new Set([...text.matchAll(/\bFS[ \t]+(\d{2,3}[ \t]*[SML]{1,2})(?!\w)/g)].map(m=>m[1]!.trim()))];
+   if(frames.length===1){got.set(p.key,{value:frames[0]!,printed:`FS ${frames[0]}`,label:p.label});continue;}
+  }
   if(concept==='hz'||/^hz$/i.test(p.unit.trim())){const l=lines.find(x=>HZ.test(x));if(l){const v=l.match(HZ)![1]!;got.set(p.key,{value:v,printed:`${v} Hz`,label:p.label});}}
  }
  return {got,ties};
@@ -348,6 +376,16 @@ const placeOn=(layout:ReadonlyMap<number,readonly PositionedLine[]>):Place=>(lab
  }
  return undefined;
 };
+// A code of a fixed shape (IP55, IE3) that the whole document prints only one of is every product's: a catalogue whose first
+// page says "IE3 premium efficiency motors, IP 55" holds IE3, IP55 motors in its tables on the next.
+function withCodes(rows:Proposal[],text:string,types:readonly EquipmentType[]):Proposal[] {
+ for(const r of rows)for(const p of types.find(t=>t.id===r.entry.type)?.params??[]){
+  const concept=conceptOf(p.label),shape=concept&&SHAPES[concept];if(!shape||p.feeds||r.entry.extra?.[p.key])continue;
+  const only=[...new Set([...text.matchAll(new RegExp(shape[0].source,`${shape[0].flags}g`))].map(shape[1]))];
+  if(only.length===1){r.entry={...r.entry,extra:{...r.entry.extra,[p.key]:only[0]!}};r.evidence=`${r.evidence} · ${p.label}: ${only[0]} (the only one the document prints)`.slice(0,300);}
+ }
+ return rows;
+}
 // A PDF is either one product's datasheet or a catalogue of many. Catalogues list their models in rating tables
 // (catalogueFromTables, by column position). One-product sheets are "label    value" rows (Siemens, ABB, WEG): the PDF text keeps
 // two or more spaces between columns, so those become cells and the whole file is read as one product. Prose sheets go through
@@ -366,8 +404,33 @@ export function catalogueFromDatasheet(pages:readonly PageEvidence[],file:string
  const single=!one?{proposals:[] as Proposal[],brand:specs.brand}:filled(specs.proposals)>=filled(prose)?specs:{proposals:prose,brand:specs.brand};
  // A table whose rows carry their own model numbers is a catalogue. Rows named only by rating ("5.5 kW") may be load points
  // in a one-product sheet, so they win only when that sheet names no model.
+ // Products set side by side, a column each: every product is read as a sheet of its own, named by its column's heading.
+ const columns=sideBySide(layout,rules).flatMap(c=>{
+  const source=`${file}, page ${c.page}`,read=types.length?withTypes({proposals:[] as Proposal[]},c.text,types,source,c.page,placeOn(layout)):catalogueFromText(c.text,source);
+  const p=read.proposals[0];if(!p)return [];
+  p.entry={...p.entry,model:clip(c.name),source:clip(source)};p.page=c.page;
+  p.unverified=p.unverified.filter(k=>k!=='model');p.evidence=[c.name,p.evidence].filter(Boolean).join(' · ').slice(0,300);
+  return [p];
+ });
+ if(columns.length>=2)return {proposals:columns,brand:specs.brand};
  const rows=catalogueFromTables(layout,file,rules,types),named=rows.some(r=>!r.unverified.includes('model'));
- if(rows.length>=2&&(named||!single.proposals.some(p=>p.entry.model)))return {proposals:rows,brand:specs.brand};
+ // A one-product sheet printing the product's ratings at several supplies (400 V Δ 50 Hz, 690 V Y 50 Hz, 460 V 60 Hz):
+ // the rows are that product's, named by the model the sheet prints, and what it prints once for the product (weight,
+ // IP code) holds for each of them. Rows at one supply are load points (25 % … 125 % load); the sheet's reading stands.
+ const model=single.proposals.length===1?single.proposals[0]!.entry.model:'',supply=(p:Proposal)=>`${p.entry.un} ${p.entry.config.match(/\b[\d/]+ Hz\b/)?.[0]??''}`;
+ if(one&&!named&&model&&rows.length>=2&&new Set(rows.map(supply)).size>1){
+  const line=text.split('\n').find(l=>l.includes(model))?.replace(/\t/g,' ').trim()??model,place=placeOn(layout);
+  const sheet=new Map(types.map(t=>[t.id,paramsOf(text,t.params).got] as const));
+  for(const r of rows){
+   const t=types.find(x=>x.id===r.entry.type),got=t&&sheet.get(t.id),extra={...r.entry.extra},more:string[]=[];
+   for(const p of t?.params??[]){const g=!p.feeds&&!extra[p.key]?got?.get(p.key):undefined;if(g){extra[p.key]=clip(g.value);more.push(`${g.label}: ${g.printed}`);}}
+   r.entry={...r.entry,model,...(Object.keys(extra).length?{extra}:{})};
+   r.unverified=r.unverified.filter(k=>k!=='model');r.evidence=[line,r.evidence,...more].filter(Boolean).join(' · ').slice(0,300);
+   const at=place('',model,r.page);if(at)r.boxes=[...r.boxes??[],{key:'model',...at}];
+  }
+  return {proposals:tellApart(rows),brand:specs.brand};
+ }
+ if(rows.length>=2&&(named||!single.proposals.some(p=>p.entry.model)))return {proposals:withCodes(rows,text,types),brand:specs.brand};
  const first=pages[0];
  if(!one||!first)return single;
  return withTypes(single,text,types,`${file}, page ${first.page}${first.mode==='ocr'?' (OCR)':''}`,first.page,placeOn(layout));

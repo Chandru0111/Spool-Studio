@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "24943d3d57f9c7d67d3e3a9d7cb8f23f172fe8f4b02a43715880db1798014d5c",
+  "sourceFingerprint": "a8a07b862e72417a4f9c452a87ec4b9c89ebe62e1165c8dd9d3f9129ba1b478c",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -336,7 +336,7 @@
       "Load list: the export's intermittent reactive operating-factor formula intentionally follows the supplied template, which can differ from the app's total-load calculation. The panel sheet matches the designed \"Panel 1\" cell for cell (except the KKS heading); it has not been opened in Excel here, so the print preview is unchecked. Text placeholders in consumed load, efficiency or power factor are left out of the export. Scenario inputs are not saved; the In vs Ib check is not run on send; one header block per sheet is read on import; the equipment grid has no arrow-key navigation.",
       "Datasheet checks cover only kVA–voltage–current, kW–voltage–current–power factor–efficiency, losses–efficiency and protection against current; a wrong value that still adds up, or one in a relation missing a value, is not caught.",
       "Learned labels apply per equipment type and exact printed label (spaces and case aside), on single-sheet label/value reading only, not per brand and not to rating-table headings.",
-      "The accuracy bench reads PDFs with a text layer only; scanned pages need the browser's OCR and are not scored."
+      "The accuracy bench reads PDF text layers. Private keys may match configurations by named fields. Missing products earn no field credit. The importer reads product-column tables, explicit full-load internal battery runtimes, printed motor frame codes, split ratio subscripts and worded voltage ranges. Rows missing a selected required parameter appear in the review filter and its count. In typed label/value rows other printed decimals help disambiguate grouping commas. Wrapped motor identifiers and multi-tier transformer schedules can still lose entire products. Scanned pages need browser OCR and are not scored."
     ],
     "changeGuide": [
       {
@@ -482,6 +482,7 @@
       "src/import/rating-table.ts",
       "src/import/schematic-read.ts",
       "src/import/schematic.ts",
+      "src/import/spec-columns.ts",
       "src/import/vocabulary.ts",
       "src/import/webpage.ts",
       "src/main.tsx",
@@ -740,6 +741,26 @@
       {
         "file": "tests/equipment-reading.test.ts",
         "name": "reads no table without equipment types unless it lists motors"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "keeps both ends of a written voltage range and resolves grouping from other printed measurements"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "selects the internal battery time at full load in either printed order"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads four left-aligned products without treating note numbers or voltage ranges as headings"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "keeps the first product when the top-left cell of the heading row is blank"
+      },
+      {
+        "file": "tests/equipment-reading.test.ts",
+        "name": "reads a second heading row as other products, not more values for the first"
       },
       {
         "file": "tests/equipment-types.test.ts",
@@ -1074,6 +1095,18 @@
         "name": "does not take a section heading in capitals for the model"
       },
       {
+        "file": "tests/rating-table-params.test.ts",
+        "name": "recognises PDF ratio subscripts on a second line and distinguishes starting current from torque"
+      },
+      {
+        "file": "tests/rating-table-params.test.ts",
+        "name": "reads a starter range at the voltage over its kW column, past a picture label in the margin and a control supply"
+      },
+      {
+        "file": "tests/rating-table-params.test.ts",
+        "name": "gives each row the value of a cell drawn across several rows, and takes no section title for a heading or a name"
+      },
+      {
         "file": "tests/release.test.mjs",
         "name": "keeps unlisted documents and linked files out of the static release"
       },
@@ -1261,8 +1294,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-25T08:08:38.436Z",
-    "sourceFingerprint": "24943d3d57f9c7d67d3e3a9d7cb8f23f172fe8f4b02a43715880db1798014d5c",
+    "checkedAt": "2026-11-26T02:26:21.660Z",
+    "sourceFingerprint": "a8a07b862e72417a4f9c452a87ec4b9c89ebe62e1165c8dd9d3f9129ba1b478c",
     "status": "passed",
     "steps": [
       {
@@ -1273,7 +1306,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  19 passed (19); Tests  202 passed (202)"
+        "summary": "Test Files  19 passed (19); Tests  210 passed (210)"
       },
       {
         "command": "npm run build",
@@ -1319,8 +1352,8 @@
     },
     {
       "path": "docs/project-knowledge.json",
-      "bytes": 50392,
-      "sha256": "df615c848828b72828235ef185035c8806bfee0d094b103787a690fe8d0e7d10",
+      "bytes": 50898,
+      "sha256": "bb1390502e02e11422f6190068fa989c0eb7af38c900229f96f499fc4247336f",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1341,7 +1374,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "d27cf51a0dfe3fe5cc50b8563e311dd83ddde0d98be076dc64c31093b8be6029",
+      "sha256": "1e878e60c464cd3a75381a78bba30e18eda09cd37753e8aa4262cd06d6414cc1",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1389,8 +1422,8 @@
     },
     {
       "path": "scripts/bench.mjs",
-      "bytes": 7241,
-      "sha256": "b51fe0a5de5c4f77cbdbf61fb0f723166ba4f8171ce68584d433c7e8e56f085b",
+      "bytes": 8029,
+      "sha256": "24ee7dafa3f8149dd74f2df25369ea61fbf29dcd564da20fb24d954e39d84299",
       "role": "Private accuracy bench for the catalogue reader: bundles the reader for Node, reads each PDF in a folder (default samples/bench, ignored by git and deployment) exactly as the app does, and scores it against the engineer's confirmed <name>.json (types, pages, rows of expected values), per sheet and per parameter, also listing rows that do not add up. --draft <types> writes a starting <name>.json from the values read. Scanned pages are not benched.",
       "exports": [],
       "imports": [
@@ -2047,11 +2080,12 @@
     },
     {
       "path": "src/import/rating-table.ts",
-      "bytes": 35557,
-      "sha256": "408d932e1fc3bcfddd35b16382a1fc5751b2916cdbb7577f588237c793e15bcb",
+      "bytes": 43168,
+      "sha256": "e76be3805f0d1fd403e9d581fee0acc1dd8121068a0471842a91f77a8c8264f5",
       "role": "Columns are named by vocabulary.ts in any listed language, checked against their values, and found from P = √3·U·I·η·cosφ when no heading is understood; type/series name = model, row-distinguishing code (product ID, frame) = configuration, title product name for size-only tables. Catalogue rating tables (one row per motor/pump/fan) read by column position from PDF item x/width: columns from overlapping numbers, stacked headings classified bottom-up (kW, hp, In at 400 V, efficiency/power factor at full load; starting current, torque, weight skipped), poles from speed or sub-headings, voltage/Hz/phase from the heading context. Rows are checked against P = √3·U·I·η·cosφ (In/Un flagged when they do not add up); a name column repeated down the table goes into the configuration, and every value keeps its page box for the review's page view. Drawn borders (rulesOf) keep a heading inside its own cell and stop values joining a column across a border. A load-point column (100 %, 75 %, 4/4) that no heading names takes its neighbour's efficiency or power-factor field, so a heading centred over 75 % still yields full-load values. With equipment types picked (catalogueFromTables types), each table is read for the type whose ticked parameters its columns give most: feedsOf gives every load-list-feeding parameter its column by nameScore (one column each, best first, efficiency/pf at full load only), else the vocabulary/P-formula column of the one quantity its label names; a table needs two parameters with columns and half the required ones, so breaker, DB, capacitor and other non-motor tables are read and motor-only rules apply only without types.",
       "exports": [
-        "catalogueFromTables"
+        "catalogueFromTables",
+        "tellApart"
       ],
       "imports": [
         "../engine/equipment-types",
@@ -2108,9 +2142,24 @@
       "runtime": true
     },
     {
+      "path": "src/import/spec-columns.ts",
+      "bytes": 8777,
+      "sha256": "23ceb2e7e38a9834ceb65dcfe3cb9f1db5499c26cfca46c23c2f8d379dac02a4",
+      "role": "Project configuration.",
+      "exports": [
+        "SideBySide",
+        "sideBySide"
+      ],
+      "imports": [
+        "./parse",
+        "./vocabulary"
+      ],
+      "runtime": true
+    },
+    {
       "path": "src/import/vocabulary.ts",
-      "bytes": 27276,
-      "sha256": "f0225fe8619883b3f2fa3c7a9149c44dcab24902cfd68e9479703a87b3524095",
+      "bytes": 29485,
+      "sha256": "a0342b4004ac096120da0274f1a413a5b5f3bee5f9a64ace7f4a80f9c4cc894c",
       "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers. Words printed for one another (HV/high, LV/low, Specs/standard) are alike; a load point (75 % load, full load) is not part of a name while no-load stays one word; what follows \"at\" in a printed label is its condition and never makes it another parameter. A label the engineer taught by clicking its value (Param.labels) names its parameter before any other route.",
       "exports": [
         "Field",
@@ -2135,8 +2184,8 @@
     },
     {
       "path": "src/import/webpage.ts",
-      "bytes": 29826,
-      "sha256": "34e591cd613220ce75883e38f9dff5e573c5a20bc2cbb52a03b01a9d0e20b8b6",
+      "bytes": 34795,
+      "sha256": "a84790ccb1e0ef361c3e1814a42ce3d42fa9a77cded8bf69669e80cdf7480d03",
       "role": "Vendor product web pages pasted from the browser or saved as .html: HTML to text (regex, never rendered), label/value pairs and comparison tables to catalogue proposals, HP to kW, checked with verify. Also reads PDF datasheets laid out as label/value columns (catalogueFromDatasheet): long labels match by their known start only with the field's unit, signal inputs and losses skipped, ligatures and wrapped labels rejoined, brand from label, title or copyright. With equipment types picked, a one-product sheet or page is read for each type (paramsOf: every ticked parameter, feeding or not, takes its best-named label, one value each, best first, full load preferred, part load only when the parameter is named at it, a unit like kvar printed once names its parameter, running-text lines split by looseOf); the product takes the type found most and its load list columns come only from that type's parameters, in the column's unit (W and hp as kW). A label split by a symbol in another font (\"Efficiency (\", \"ɳ\", \") at 100% Load\") is rejoined at its brackets; a power in kVA or kvar is never kW; columns the chosen type does not fill are cleared; each value read is boxed where it is printed (placeOn: the item on the line after its label). Lines are read with the section heading printed over them (HV side, Losses). Two labels naming a parameter equally with different values are settled by the row's sums (checks.ts). pickAt reads a value clicked in the review's page view and the label printed before it; placeOn boxes a value printed as several items.",
       "exports": [
         "MAX_PAGE",
@@ -2156,6 +2205,7 @@
         "./equipment",
         "./parse",
         "./rating-table",
+        "./spec-columns",
         "./vocabulary"
       ],
       "runtime": true
@@ -2264,8 +2314,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 33891,
-      "sha256": "68769beb6fd83df816f89c2395d9467cae099048a9e0f9e4a360a1f509daae83",
+      "bytes": 34190,
+      "sha256": "6b75b5e7e2ee91e07e3f6a34d7e1ef7b31f1b7d11a197bc0b1e86b705285919e",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet. Amber cells for values that do not add up (checks.ts), rechecked on every edit. In the page view a parameter can be picked and its value clicked: the row takes it and the label printed before it is learned for that equipment type (project loads.learned; Forget learned labels clears them, Undo restores).",
       "exports": [
         "Catalogue"
@@ -2743,8 +2793,8 @@
     },
     {
       "path": "tests/equipment-reading.test.ts",
-      "bytes": 10534,
-      "sha256": "7af0e732d4b440ff25d8731fc99eece764efd0986387ad5269cdef95f9a5d7f1",
+      "bytes": 13925,
+      "sha256": "175b218af208e6a2a53abd6042104af842a02a909d930a7d284c410ab404bf7f",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2765,7 +2815,12 @@
         "reads it as an HV transformer: LV side into Un and In, kVA kept apart from kW, efficiency at full load",
         "never takes kVA for the kW the load list needs, whatever type is picked",
         "reads a breaker table into the protection rating, its voltage and breaking capacity",
-        "reads no table without equipment types unless it lists motors"
+        "reads no table without equipment types unless it lists motors",
+        "keeps both ends of a written voltage range and resolves grouping from other printed measurements",
+        "selects the internal battery time at full load in either printed order",
+        "reads four left-aligned products without treating note numbers or voltage ranges as headings",
+        "keeps the first product when the top-left cell of the heading row is blank",
+        "reads a second heading row as other products, not more values for the first"
       ],
       "runtime": false
     },
@@ -2998,20 +3053,24 @@
     },
     {
       "path": "tests/rating-table-params.test.ts",
-      "bytes": 3110,
-      "sha256": "94769645710df7bd012caaf6311de220a287c27cf80f434c5e5c706f29211afa",
+      "bytes": 7972,
+      "sha256": "7cc2a7c8148345fef8040f1b9bd79cf63d07dfb70ef9abda88a2db7821b9204d",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
         "../src/engine/equipment-types",
         "../src/import/parse",
         "../src/import/rating-table",
+        "../src/import/vocabulary",
         "vitest"
       ],
       "tests": [
         "fills each catalogue-only parameter from its column, the row, or the title, and keeps the efficiency class in the series name",
         "reads nothing extra when no parameter is ticked",
-        "does not take a section heading in capitals for the model"
+        "does not take a section heading in capitals for the model",
+        "recognises PDF ratio subscripts on a second line and distinguishes starting current from torque",
+        "reads a starter range at the voltage over its kW column, past a picture label in the margin and a control supply",
+        "gives each row the value of a cell drawn across several rows, and takes no section title for a heading or a name"
       ],
       "runtime": false
     },
@@ -3705,6 +3764,18 @@
       "resolved": true
     },
     {
+      "from": "src/import/spec-columns.ts",
+      "to": "src/import/parse.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/spec-columns.ts",
+      "to": "src/import/vocabulary.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
       "from": "src/import/webpage.ts",
       "to": "src/engine/equipment-types.ts",
       "relation": "imports",
@@ -3749,6 +3820,12 @@
     {
       "from": "src/import/webpage.ts",
       "to": "src/import/rating-table.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/webpage.ts",
+      "to": "src/import/spec-columns.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -5037,6 +5114,12 @@
     },
     {
       "from": "tests/rating-table-params.test.ts",
+      "to": "src/import/vocabulary.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/rating-table-params.test.ts",
       "to": "vitest",
       "relation": "external"
     },
@@ -5214,103 +5297,98 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-25T08:08:38.509Z",
+  "updatedAt": "2026-11-26T02:26:21.737Z",
   "history": [
     {
-      "at": "2026-11-25T08:00:34.325Z",
+      "at": "2026-11-26T02:02:12.105Z",
       "added": [],
       "modified": [
-        "src/ui/Catalogue.tsx"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:00:39.157Z",
+      "at": "2026-11-26T02:02:40.417Z",
       "added": [],
       "modified": [
-        "src/ui/app.css"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:00:59.807Z",
+      "at": "2026-11-26T02:02:59.884Z",
       "added": [],
       "modified": [
-        "tests/catalogue-params.test.ts"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:02:36.723Z",
+      "at": "2026-11-26T02:03:55.171Z",
       "added": [],
       "modified": [
-        "src/import/document.ts",
-        "src/import/parse.ts"
+        "tests/rating-table-params.test.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:02:52.931Z",
+      "at": "2026-11-26T02:04:01.591Z",
       "added": [],
       "modified": [
-        "scripts/bench.mjs",
-        "src/import/document.ts"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:03:22.843Z",
+      "at": "2026-11-26T02:04:02.213Z",
       "added": [],
       "modified": [
-        "src/import/parse.ts"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:03:53.542Z",
+      "at": "2026-11-26T02:05:04.234Z",
       "added": [],
       "modified": [
-        "src/import/webpage.ts"
+        "src/import/vocabulary.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:04:24.854Z",
+      "at": "2026-11-26T02:06:03.171Z",
       "added": [],
       "modified": [
-        "src/import/parse.ts",
-        "tests/catalogue-params.test.ts"
+        "docs/verification.json"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:04:42.467Z",
+      "at": "2026-11-26T02:08:18.331Z",
       "added": [],
       "modified": [
-        "src/import/webpage.ts"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:06:32.606Z",
+      "at": "2026-11-26T02:08:37.097Z",
       "added": [],
       "modified": [
-        "src/import/checks.ts",
-        "tests/checks.test.ts"
+        "docs/verification.json"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:08:28.703Z",
+      "at": "2026-11-26T02:26:11.981Z",
       "added": [],
       "modified": [
-        "README.md",
-        "docs/project-knowledge.json"
+        "src/import/rating-table.ts"
       ],
       "removed": []
     },
     {
-      "at": "2026-11-25T08:08:38.509Z",
+      "at": "2026-11-26T02:26:21.737Z",
       "added": [],
       "modified": [
         "docs/verification.json"

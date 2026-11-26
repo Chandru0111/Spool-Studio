@@ -85,9 +85,10 @@ function pick(cols:readonly Column[],kind:Kind):Column|undefined {
  for(const re of want){const hit=of.find(c=>re.test(head(c)));if(hit)return hit;}
  return of[0];
 }
-// The voltage a table is printed for, in volts: "400 V", "380/415 V", "3000 V" or "3.3 kV".
+// The voltage a table is printed for, in volts: "400 V", "380/415 V", "3000 V" or "3.3 kV"; never the end of a range
+// ("Ue 208-600 V" is the range a device works over, not its rating).
 function voltsIn(s:string):string|undefined {
- const m=s.match(/\b(\d{3,5}(?:\s*\/\s*\d{3,5})?)\s*V\b|\b(\d{1,2}(?:[.,]\d+)?)\s*kV\b/);
+ const m=s.match(/(?<!\d\s*[-–]\s*)\b(\d{3,5}(?:\s*\/\s*\d{3,5})?)\s*V\b|(?<!\d\s*[-–]\s*)\b(\d{1,2}(?:[.,]\d+)?)\s*kV\b/);
  return m?.[1]?.replace(/\s/g,'')??(m?.[2]?String(Math.round(Number(dot(m[2]))*1000)):undefined);
 }
 const overlap=(c:{x0:number;x1:number},x0:number,x1:number)=>Math.min(c.x1,x1)-Math.max(c.x0,x0);
@@ -122,7 +123,8 @@ function titleName(around:readonly Cell[][],left:number,right:number):{text:stri
   // A title is a few pieces at the left (a heading row spreads across the table); marks out at the right edge do not count.
   if(!l.length||l.filter(c=>c.x0<left+(right-left)*0.7).length>3||l[0]!.x0>left+30||isProse(l))continue;
   for(const cell of l){
-   const words=cell.text.split(/[\s|,;:&()]+/).filter(w=>/^[A-Z0-9][A-Z0-9.\-/]*$/.test(w)&&/[A-Z]/.test(w)&&w.length>=2&&w.length<=20&&
+   // A section's letter ("A. Electrical data") is no name: a name has two letters or figures at least.
+   const words=cell.text.split(/[\s|,;:&()]+/).filter(w=>/^[A-Z0-9][A-Z0-9.\-/]*$/.test(w)&&/[A-Z]/.test(w)&&w.replace(/[^A-Z0-9]/g,'').length>=2&&w.length<=20&&
     (/\d/.test(w)||w.replace(/[^A-Z]/g,'').length<=5)&&!/^\d+(?:[.,]\d+)?[A-Z%]{0,3}$/.test(w)&&!/\d\s*-?\s*POL/.test(w)&&!NOT_NAME.test(w)&&!fieldsIn(w).size);
    if(!words.some(w=>!IE_CLASS.test(w)))continue;
    if(!words.some(w=>/\d/.test(w))&&cell.text.split(/[\s|,;:&()]+/).some(w=>/^\p{Lu}{6,}$/u.test(w)&&!fieldsIn(w).size))continue;
@@ -188,7 +190,8 @@ function feedsOf(params:readonly Param[],cols:readonly Column[],ids:ReadonlySet<
 export function catalogueFromTables(layout:ReadonlyMap<number,readonly PositionedLine[]>,file:string,rules:ReadonlyMap<number,readonly Rule[]>=new Map(),types:readonly EquipmentType[]=[]):Proposal[] {
  const out:Proposal[]=[],seen=new Set<string>();
  for(const [page,lines] of layout){
-  const cells=lines.map(cellsOf);let i=0;
+  // prev: the columns of the table above on the page.
+  const cells=lines.map(cellsOf);let i=0,prev:Column[]=[];
   // The borders drawn across a text line (at the middle of its letters), and whether one runs between two points on it.
   const edges=edgesOf(rules.get(page)??[]),drawn=new Map<number,number[]>();
   const walls=(cell:Cell)=>{const y=Math.round(cell.y+cell.h*0.3);let w=drawn.get(y);
@@ -198,10 +201,11 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
   while(i<lines.length){
    if(!isData(cells[i]!)){i++;continue;}
    // A block of rows; a line or two between rows ("4 poles – 1500 rpm") is a sub-heading for the rows below it.
-   const start=i,rows:{cells:Cell[];sub:string}[]=[];let sub='',gap=0;
+   // between: what is printed on those lines, inside the block only (the lines after its last row are not).
+   const start=i,rows:{cells:Cell[];sub:string}[]=[],between:Cell[]=[];let sub='',gap=0,pending:Cell[]=[];
    for(;i<lines.length;i++){
-    const c=cells[i]!;if(isData(c)){rows.push({cells:c,sub});gap=0;continue;}
-    if(++gap>2)break;sub=c.map(x=>x.text).join(' ');
+    const c=cells[i]!;if(isData(c)){rows.push({cells:c,sub});between.push(...pending);pending=[];gap=0;continue;}
+    if(++gap>2)break;sub=c.map(x=>x.text).join(' ');pending.push(...c);
    }
    if(rows.length<2)continue;
    // Columns: numbers that overlap across rows are one column; text cells join the column they overlap, or form their own.
@@ -214,14 +218,52 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    };
    for(const r of rows)for(const c of r.cells)if(NUM.test(c.text))add(c);
    for(const r of rows)for(const c of r.cells)if(!NUM.test(c.text))add(c);
+   // A cell drawn across several rows (a merged cell: "0.4" kV printed once for every rating, "6.3 6.6 10" stacked, "4" %
+   // centred on the ratings it holds for) gives its value to each row inside it: the row borders drawn over and under it
+   // (lines, or the edges of drawn boxes) hold two rows or more. Only a table that draws its row borders is read so, and a
+   // cell no more than half of whose rows print their own value there; one over several columns (a shaded table) is not.
+   const merged=new Map<object,Map<Column,Cell>>(),yOf=(x:Cell)=>x.y+x.h*0.3,rowY=(r:{cells:Cell[]})=>yOf(r.cells[0]!);
+   const hor=(rules.get(page)??[]).flatMap(b=>b.y1-b.y0<2?[{x0:b.x0,x1:b.x1,y:(b.y0+b.y1)/2}]:b.x1-b.x0>=3?[{x0:b.x0,x1:b.x1,y:b.y0},{x0:b.x0,x1:b.x1,y:b.y1}]:[]);
+   const low=Math.min(...rows.map(rowY)),high=Math.max(...rows.map(rowY));
+   if(new Set(hor.filter(h=>h.y>low&&h.y<high).map(h=>Math.round(h.y))).size>=rows.length-1){
+    const regions=new Map<string,{l:number;r:number;top:number;bot:number;items:Cell[]}>();
+    for(const x of [...rows.flatMap(r=>r.cells),...between]){
+     const y=yOf(x),ys=hor.filter(h=>h.x0-1<=centre(x)&&centre(x)<=h.x1+1).map(h=>h.y),top=Math.min(...ys.filter(v=>v>y)),bot=Math.max(...ys.filter(v=>v<y));
+     if(!Number.isFinite(top)||!Number.isFinite(bot)||rows.filter(r=>rowY(r)>bot&&rowY(r)<top).length<2)continue;
+     const w=walls(x),l=w.filter(v=>v<=x.x0+1).at(-1)??x.x0,r=w.find(v=>v>=x.x1-1)??x.x1,key=`${l} ${r} ${top} ${bot}`;
+     const g=regions.get(key)??{l,r,top,bot,items:[]};g.items.push(x);regions.set(key,g);
+    }
+    for(const {l,r,top,bot,items} of regions.values()){
+     const inside=rows.filter(w=>rowY(w)>bot&&rowY(w)<top),printed=inside.filter(w=>w.cells.some(x=>items.includes(x)));
+     const under=cols.filter(c=>centre(c)>l&&centre(c)<r);if(printed.length*2>inside.length||under.length>1)continue;
+     // Read top to bottom; figures stacked one under another are the choices: "6/6.3/6.6".
+     items.sort((a,c)=>c.y-a.y||a.x0-c.x0);
+     const text=items.map(x=>x.text).join(' ').replace(/(?<=\d)\s+(?=\d)/g,'/'),numeric=NUM.test(text)||/^[\d./]+$/.test(text);
+     const x0=Math.min(...items.map(x=>x.x0)),x1=Math.max(...items.map(x=>x.x1)),y=Math.min(...items.map(x=>x.y));
+     const cell:Cell={x0,x1,y,h:Math.max(...items.map(x=>x.y+x.h))-y,text};
+     let col=under[0];if(!col){col={x0,x1,head:[],own:[],text:0,numbers:0};cols.push(col);}
+     if(numeric)col.numbers+=inside.length-printed.length;else if(/\p{L}/u.test(text))col.text+=inside.length-printed.length;
+     for(const w of inside){const m=merged.get(w)??new Map<Column,Cell>();m.set(col,cell);merged.set(w,m);}
+    }
+   }
    cols.sort((a,b)=>a.x0-b.x0);
    // Headings: the short lines straight above the block (up to twelve: subscripts and units sit on lines of their own),
    // ending at a sentence or title. A group label ("500 r/min = 12 poles") is not a heading. Everything up to sixteen
    // lines above, nearest first, is context for voltage, frequency, poles and the product name; another table ends both.
-   const heads:Cell[][]=[],around:Cell[][]=[];let inHeads=true;
+   // A rule drawn across the whole table above a heading row that spans its columns is the table's top border: the form
+   // fields and section titles above it (a datasheet's "Order no.", "Remarks", "Electrical data") head nothing.
+   const left=Math.min(...cols.map(c=>c.x0)),right=Math.max(...cols.map(c=>c.x1));
+   const across=(rules.get(page)??[]).filter(r=>r.y1-r.y0<2&&Math.min(r.x1,right)-Math.max(r.x0,left)>=(right-left)*0.9).map(r=>(r.y0+r.y1)/2);
+   const top=(c:readonly Cell[])=>Math.max(...c.map(x=>x.y+x.h)),base=(c:readonly Cell[])=>Math.min(...c.map(x=>x.y));
+   const spans=(c:readonly Cell[])=>cols.filter(col=>c.some(x=>overlap(col,x.x0,x.x1)>0)).length>=Math.max(3,cols.length/3);
+   const heads:Cell[][]=[],around:Cell[][]=[];let inHeads=true,spanned=false;
+   // A line set larger than the table's figures is a title over it ("10kV/11kV", "A. Electrical data"), not a heading.
+   const hs=rows.flatMap(r=>r.cells.map(x=>x.h)).sort((a,b)=>a-b),size=hs[hs.length>>1]??8;
    for(let k=start-1;k>=0&&start-k<=16;k--){
     const c=cells[k]!,text=c.map(x=>x.text).join(' ');if(isData(c))break;
-    if(isProse(c)||start-k>12)inHeads=false;
+    if(spanned&&c.length&&cells[k+1]?.length&&across.some(y=>y>top(cells[k+1]!)&&y<base(c)))inHeads=false;
+    if(isProse(c)||start-k>12||c.length&&Math.min(...c.map(x=>x.h))>size*1.5)inHeads=false;
+    if(inHeads&&spans(c))spanned=true;
     if(inHeads&&polesIn(text)===null)heads.unshift(c);
     around.push(c);
    }
@@ -230,21 +272,36 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    // across a border. Borders count only where they divide the table (a shaded band behind the whole heading row does
    // not) and the words do not cross one. A heading alone in a cell with one column heads it even when printed far from
    // its figures; a group cell ("Current" over In, Is/In, I0) still lets its sub-headings pick their column by position.
-   const left=Math.min(...cols.map(c=>c.x0)),right=Math.max(...cols.map(c=>c.x1));
    const cellOver=(item:Cell)=>{
     const w=walls(item);if(!w.some(x=>x>left+1&&x<right-1)||w.some(x=>x>item.x0+1&&x<item.x1-1))return undefined;
     const l=w.filter(x=>x<=item.x0+1).at(-1),r=w.find(x=>x>=item.x1-1);if(l===undefined||r===undefined)return undefined;
     return (c:Column)=>centre(c)>l&&centre(c)<r;
    };
+   // Items set flush against each other are one word: a symbol and its subscript ("I", "A", "/I", "N" is IA/IN).
+   const words=(t:readonly Cell[])=>t.map((x,j)=>j&&x.x0-t[j-1]!.x1<0.08*Math.min(x.h,t[j-1]!.h)?x.text:` ${x.text}`).join('').trim();
+   // Text on fewer than half the rows and no figures ("FIG0001", "QS30 ... QS45": a picture's label or
+   // caption printed in the margin between rows) is no column of the table: a heading over it and a real column is the real one's.
+   const thin=(c:Column)=>!c.numbers&&c.text>0&&c.text*2<rows.length;
+   const nearOf=(item:Cell)=>{const over=cols.filter(c=>overlap(c,item.x0-2,item.x1+2)>0);return over.some(c=>!thin(c))?over.filter(c=>!thin(c)):over;};
    for(const l of heads){
-    const got=new Map<Column,string[]>(),own=new Map<Column,string[]>();
+    const got=new Map<Column,Cell[]>(),own=new Map<Column,Cell[]>();
+    // A word printed only beside a column heads it unless another word of the line is printed over it: "Frequency" beside
+    // "Power" (over kVA) heads a column whose value is one cell across all rows, printed between them, not the kVA's.
+    const squarely=new Set(l.flatMap(nearOf));
     for(const item of l){
-     const near=cols.filter(c=>overlap(c,item.x0-2,item.x1+2)>0),inCell=cellOver(item),lone=inCell&&cols.filter(inCell);
-     const under=!inCell?near:near.some(inCell)?near.filter(inCell):lone&&lone.length===1?lone:[],to=under.length?under:[columnOf(cols,item,c=>apart(item,c))].filter(c=>c!==undefined);
-     for(const c of to){got.set(c,[...got.get(c)??[],item.text]);if(to.length===1)own.set(c,[...own.get(c)??[],item.text]);}
+     const near=nearOf(item),inCell=cellOver(item),lone=inCell&&cols.filter(inCell);
+     const under=!inCell?near:near.some(inCell)?near.filter(inCell):lone&&lone.length===1?lone:[],to=under.length?under:[columnOf(cols,item,c=>apart(item,c))].filter((c):c is Column=>c!==undefined&&!squarely.has(c));
+     for(const c of to){got.set(c,[...got.get(c)??[],item]);if(to.length===1)own.set(c,[...own.get(c)??[],item]);}
     }
-    for(const [c,t] of got)c.head.push(t.join(' '));for(const [c,t] of own)c.own.push(t.join(' '));
+    for(const [c,t] of got)c.head.push(words(t));for(const [c,t] of own)c.own.push(words(t));
    }
+   // A table printed on under the one above (the same starters for another voltage range), its columns where that one's
+   // are, with a title but no headings of its own over most columns, is read by that one's headings.
+   const above=(c:Column)=>prev.filter(p=>overlap(p,c.x0-2,c.x1+2)>0).sort((a,b)=>overlap(b,c.x0,c.x1)-overlap(a,c.x0,c.x1))[0];
+   if(prev.length&&cols.filter(c=>c.own.length).length*2<cols.length&&cols.every(c=>!c.numbers||above(c))){
+    for(const c of cols){const p=above(c);if(p){c.own=[...p.own];c.head=[...p.head,...c.head];}}
+   }
+   prev=cols;
    const colOf=(x:Cell)=>columnOf(cols,x,c=>apart(x,c));
    const textOf=(r:{cells:Cell[]},c:Column)=>r.cells.filter(x=>colOf(x)===c).map(x=>x.text).join(' ').trim();
    const numsOf=(c:Column)=>rows.map(r=>num(dot(textOf(r,c)).replace(/%$/,''))).filter((n):n is number=>n!==null);
@@ -259,11 +316,14 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
     if(!c.kind&&!c.skip&&rows.length>=2&&v.length===rows.length&&v.every(n=>SYNC_RPM.some(s=>n<=s&&n>=s*0.9)))c.kind='speed';
    }
    // Efficiency or power factor at several loads (100 %, 75 %, 50 % or 4/4, 3/4, 2/4): the heading is often centred
-   // over the middle load only, so a load-point column no heading names takes its neighbour's field.
+   // over the middle load only, so a load-point column no heading names takes its neighbour's field. A group prints each
+   // load once, so a column joins no group that already has its load ("4/4 3/4 2/4 | 4/4 3/4 2/4": the second 4/4 starts
+   // the power factor's group, it does not end the efficiency's).
    const loadPoint=(c:Column|undefined)=>!!c&&c.own.some(t=>LOAD_POINT(t));
+   const groupHas=(o:Column,step:number,load:number|undefined)=>{for(let k=cols.indexOf(o);cols[k]?.kind===o.kind;k+=step)if(loadOf(cols[k]!)===load)return true;return false;};
    for(let pass=0;pass<2;pass++)cols.forEach((c,j)=>{
     if(c.kind||c.skip||!loadPoint(c))return;
-    const n=[cols[j-1],cols[j+1]].find(o=>(o?.kind==='eff'||o?.kind==='pf')&&loadPoint(o));
+    const n=([[cols[j-1],-1],[cols[j+1],1]] as const).find(([o,step])=>(o?.kind==='eff'||o?.kind==='pf')&&loadPoint(o)&&!groupHas(o,step,loadOf(c)))?.[0];
     if(n){c.kind=n.kind;c.head=[...n.head.filter(t=>!LOAD_POINT(t)),...c.own];}
    });
    // kW, In, efficiency and power factor that no heading names (a wording or language not in the vocabulary): the free
@@ -277,7 +337,8 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
      const of=(k:'kw'|'in'|'eff'|'pf')=>{const c=need.includes(k)?chosen[need.indexOf(k)]:pick(cols,k);return c?plain.get(c)!:[];};
      const P=of('kw'),A=of('in'),E=of('eff'),F=of('pf');
      const us=rows.map((_,j)=>{const p=P[j],a=A[j],e=frac(E[j]),f=frac(F[j]);
-      return p&&a&&e&&f&&e>0.3&&e<=1&&f>0.1&&f<=1?p*1000/(Math.sqrt(3)*a*e*f):null;}).filter((u):u is number=>u!==null);
+      // A motor's efficiency rises with its size: about 60 % at 1 kW, 70 % at 10 kW, 80 % at 100 kW at the very least.
+      return p&&a&&e&&f&&e>=Math.min(0.85,0.6+0.1*Math.log10(p))&&e<=1&&f>0.1&&f<=1?p*1000/(Math.sqrt(3)*a*e*f):null;}).filter((u):u is number=>u!==null);
      if(us.length<Math.max(2,rows.length-1))return;
      const mid=[...us].sort((a,b)=>a-b)[us.length>>1]!,spread=Math.max(...us.map(u=>Math.abs(u/mid-1)));
      if(spread<=0.08&&VOLTAGES.some(v=>Math.abs(mid/v-1)<=0.08)&&(!best||spread<best.spread))best={cols:chosen,spread};
@@ -293,7 +354,8 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    // model; with neither, the code is.
    // Punctuation aside: a scan's stray mark ("OMT2 :") does not make a series name vary.
    const distinct=(c:Column)=>new Set(rows.map(r=>textOf(r,c).replace(/[^\p{L}\p{N}]/gu,'')).filter(Boolean)).size;
-   const texts=cols.filter(c=>c.text>c.numbers&&!c.kind&&!c.skip&&c.text*2>=rows.length);
+   // A name is more than one letter: a column of "Δ" and "Y" is the winding connection.
+   const texts=cols.filter(c=>c.text>c.numbers&&!c.kind&&!c.skip&&c.text*2>=rows.length&&rows.some(r=>textOf(r,c).replace(/[^\p{L}\p{N}]/gu,'').length>1));
    // An unlabelled text column names the rows only when no labelled one does (an efficiency-class column of "IE3" is not a name).
    const labelled=cols.filter(c=>c.kind==='name'||c.kind==='code'||c.kind==='frame'),ids=labelled.length||texts.length!==1?labelled:texts;
    const varies=ids.some(c=>distinct(c)>1);
@@ -301,14 +363,19 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    const nameCol=names.find(c=>distinct(c)>1)??names[0],codes=ids.filter(c=>!names.includes(c));
    const title=nameCol?undefined:titleName(around,left,right);
    const modelCol=nameCol??(title?undefined:codes[0]);
-   const configCols=ids.filter(c=>c!==modelCol).sort((a,b)=>a.x0-b.x0);
+   // Name columns under one heading that spans them ("Motor type" over "M3BP" and "280 SMB 2") print one name between them.
+   const underOne=(c:Column)=>!c.own.length&&c.head.join('\n')===modelCol!.head.join('\n');
+   const modelCols=!modelCol?[]:modelCol===nameCol&&underOne(modelCol)?names.filter(underOne).sort((a,b)=>a.x0-b.x0):[modelCol];
+   const configCols=ids.filter(c=>!modelCols.includes(c)).sort((a,b)=>a.x0-b.x0);
    const poles=pick(cols,'poles'),speed=pick(cols,'speed');
    const ctx=[...context,...(inA?[inA.head.join(' ')]:[])].join('\n');
-   const tableHz=ctx.match(/\b(50|60)\s*Hz\b/i)?.[1],hzCol=cols.find(c=>c.skip&&fieldsIn(c.own.join(' ')).has('hz')),three=/3\s*~|three[\s-]*phase|\b3[\s-]*ph/i.test(ctx),one=/1\s*~|single[\s-]*phase|\b1[\s-]*ph/i.test(ctx);
+   // "50/60 Hz" (a control supply's, or a dual rating) names no one frequency for the table.
+   const tableHz=ctx.match(/(?<!\d\s*\/\s*)\b(50|60)\s*Hz\b/i)?.[1],hzCol=cols.find(c=>c.skip&&fieldsIn(c.own.join(' ')).has('hz')),three=/3\s*~|three[\s-]*phase|\b3[\s-]*ph/i.test(ctx),one=/1\s*~|single[\s-]*phase|\b1[\s-]*ph/i.test(ctx);
    // A row's printed values, each kept only in a plausible range (kW from W or hp).
    const read=(r:{cells:Cell[]})=>{
     const at=new Map<Column,Cell[]>();
     for(const c of r.cells){const col=colOf(c);if(col)at.set(col,[...at.get(col)??[],c]);}
+    for(const [col,cell] of merged.get(r)??[])at.set(col,[cell]);
     const raw=(c?:Column)=>c?(at.get(c)??[]).map(x=>x.text).join(' ').trim():'',val=(c?:Column)=>dot(raw(c)).replace(/%$/,''),n=(c?:Column)=>num(val(c));
     const kwN=n(kw)===null?null:watts?+(n(kw)!/1000).toFixed(4):n(kw),hpN=n(hp),k=kwN??(hpN===null?null:+(hpN*HP_KW).toFixed(3));
     const amps=n(inA),ef=num(asFraction(val(eff))),p=num(asFraction(val(pf)));
@@ -321,9 +388,10 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    const printed=[...new Set(context.map(voltsIn).filter((v):v is string=>!!v))];
    const us=rows.map(r=>implied(read(r),one&&!three)).filter((u):u is number=>u!==null).sort((a,b)=>a-b),mid=us[us.length>>1];
    const off=(v:string)=>Math.min(...v.split('/').map(x=>Math.abs(Number(x)-(mid??0))));
-   const volts=voltsIn(inA?.head.join(' ')??'')??(mid!==undefined&&printed.length>1?printed.reduce((a,b)=>off(b)<off(a)?b:a):printed[0]);
-   const voltLine=volts?ctx.split('\n').find(l=>voltsIn(l)===volts)??'':'';
-   const hzLine=tableHz?ctx.split('\n').find(l=>new RegExp(`\\b${tableHz}\\s*Hz`,'i').test(l))??'':'';
+   // Next, the voltage over the power column the kW is read from ("400 V  500 V  690 V" over three kW columns: the first).
+   const volts=voltsIn(inA?.head.join(' ')??'')??voltsIn((kw??hp)?.own.join(' ')??'')??(mid!==undefined&&printed.length>1?printed.reduce((a,b)=>off(b)<off(a)?b:a):printed[0]);
+   const voltLine=volts?ctx.split('\n').find(l=>voltsIn(l)===volts)??(kw??hp)?.own.find(l=>voltsIn(l)===volts)??'':'';
+   const hzLine=tableHz?ctx.split('\n').find(l=>new RegExp(`(?<!\\d\\s*\\/\\s*)\\b${tableHz}\\s*Hz`,'i').test(l))??'':'';
    // With equipment types picked, the table is read for the type whose ticked parameters its columns give most (a required
    // one counting twice; a tie is flagged). It is a product table when at least two of them have a column, at least half
    // the type's required ones are found (a voltage printed over the table counts), and its rows are named (a name, code or
@@ -346,7 +414,7 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    }else if(!(kw||hp)||!(inA||eff||pf)||!(ids.length||inA))continue;
    const plans=as?.plans??[];
    const feedCols:[Column|undefined,CatalogueKey][]=as?as.feeds.map(f=>[f.col,f.param.feeds as CatalogueKey]):[[kw,'ratedKw'],[hp,'ratedKw'],[inA,'inA'],[eff,'efficiency'],[pf,'pf'],[un,'un']];
-   const used:[Column|undefined,CatalogueKey][]=[[modelCol,'model'],...configCols.map(c=>[c,'config'] as [Column,CatalogueKey]),...feedCols];
+   const used:[Column|undefined,CatalogueKey][]=[...modelCols.map(c=>[c,'model'] as [Column,CatalogueKey]),...configCols.map(c=>[c,'config'] as [Column,CatalogueKey]),...feedCols];
    // A row's value for a parameter that fills a load list column. A column the motor readers found for that column's
    // quantity keeps their reading (kW from W or hp, values in a plausible range); any other is read in the column's unit.
    const fedBy=(f:Feed,v:ReturnType<typeof read>,u:string):{value:string;was?:string}=>{
@@ -382,7 +450,7 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
      for(const f of as.feeds){
       const k=f.param.feeds as CatalogueKey,got=fedBy(f,v,u);e[k]=got.value;if(!got.value)continue;
       if(got.was||k==='ratedKw'&&(f.col===kw||f.col===hp)&&(kwN===null||watts))converted.add(k);
-      fedEvidence.push(got.was?`${f.col.head.slice(-2).join(' ')||'?'}: ${got.was} = ${got.value} ${reading(f.param).unit}`:`${f.col.head.slice(-2).join(' ')||'?'}: ${raw(f.col)}`);
+      fedEvidence.push(got.was?`${f.col.head.slice(-2).join(' ')||'?'}: ${got.was} = ${got.value}${got.value.endsWith(reading(f.param).unit)?'':` ${reading(f.param).unit}`}`:`${f.col.head.slice(-2).join(' ')||'?'}: ${raw(f.col)}`);
      }
     }else if(!e.ratedKw||![e.inA,e.efficiency,e.pf].some(Boolean))continue;
     const spd=n(speed),np=n(poles),pl=(np!==null&&np>=2&&np<=16&&np%2===0?np:null)??(spd===null?null:polesFrom(spd))??polesIn(r.sub)??polesIn(ctx);
@@ -401,7 +469,7 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
      if(as.t.params.filter(has).length<2||req.filter(has).length*2<req.length)continue;
     }
     // The model is only ever text printed on the page: the row's name or code, or the product name over the table. Never made up.
-    e.model=clip(modelCol?raw(modelCol):title?.text??'');
+    e.model=clip(modelCols.length?modelCols.map(c=>raw(c)).filter(Boolean).join(' '):title?.text??'');
     e.config=clip([...configCols.map(c=>raw(c)),e.un,phase,hz?`${hz} Hz`:'',pl?`${pl}-pole`:''].filter(Boolean).join(', '));
     e.source=clip(`${file}, page ${page}`);
     if(as)e.type=as.t.id;
@@ -410,7 +478,8 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
     const key=JSON.stringify({...e,source:''});if(seen.has(key))continue;seen.add(key);
     if(title)evidence.push(title.box.text);
     // The heading lines nearest the numbers.
-    for(const c of as?[modelCol,...configCols]:[modelCol,...configCols,kw,hp,inA,eff,pf,un,poles,speed])if(c&&raw(c))evidence.push(`${c.head.slice(-2).join(' ')||'?'}: ${raw(c)}`);
+    if(modelCols.length&&e.model)evidence.push(`${modelCols[0]!.head.slice(-2).join(' ')||'?'}: ${e.model}`);
+    for(const c of as?configCols:[...configCols,kw,hp,inA,eff,pf,un,poles,speed])if(c&&raw(c))evidence.push(`${c.head.slice(-2).join(' ')||'?'}: ${raw(c)}`);
     evidence.push(...fedEvidence);
     if(e.ratedKw&&hpN!==null&&kwN===null&&(!as||converted.has('ratedKw')))evidence.push(`${raw(hp)} hp = ${e.ratedKw} kW (1 hp = ${HP_KW} kW)`);
     if(e.ratedKw&&watts&&kwN!==null&&(!as||converted.has('ratedKw')))evidence.push(`${raw(kw)} W = ${e.ratedKw} kW`);
@@ -425,8 +494,11 @@ export function catalogueFromTables(layout:ReadonlyMap<number,readonly Positione
    }
   }
  }
- // Rows of one model and configuration would replace each other in the catalogue: one frame at several outputs gets its
- // kW, and the same frame in two series or efficiency classes its page, until the engineer names the series.
+ return tellApart(out);
+}
+// Rows of one model and configuration would replace each other in the catalogue: one frame at several outputs gets its
+// kW, and the same frame in two series or efficiency classes its page, until the engineer names the series.
+export function tellApart(out:Proposal[]):Proposal[] {
  const by=new Map<string,Proposal[]>();
  for(const p of out)if(p.entry.model){const k=`${p.entry.model}\u0000${p.entry.config}`.toLowerCase();by.set(k,[...by.get(k)??[],p]);}
  for(const g of by.values()){

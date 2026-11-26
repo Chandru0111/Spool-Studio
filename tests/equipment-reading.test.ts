@@ -133,3 +133,47 @@ describe('reading a rating table for any equipment type',()=>{
   expect(catalogueFromTables(new Map([[4,lines]]),'made-up.pdf')).toHaveLength(0);
  });
 });
+
+describe('catalogue notation seen on manufacturer sheets',()=>{
+ it('keeps both ends of a written voltage range and resolves grouping from other printed measurements',()=>{
+  const lamp=(pf:string)=>read(['  Model     RQ-12','  Input voltage     210 to 250 V','  Power factor     '+pf,'  Luminous flux     5,250 lm'],[type('lighting')])[0]!.entry;
+  expect(lamp('0.87')).toMatchObject({un:'210-250 V',extra:{'luminous-flux':'5250'}});
+  expect(lamp('0,87').extra?.['luminous-flux']).toBe('5.250');
+  expect(lamp('1').extra?.['luminous-flux']).toBeUndefined();
+ });
+ it('selects the internal battery time at full load in either printed order',()=>{
+  const [row]=read(['  Model     QY-92','  Input voltage     230 V',
+   '  Backup time in minutes (internal battery) half / full load     31 / 14',
+   '  Backup time in minutes (external battery) half / full load     82 / 40'],[type('ups')]);
+  expect(row!.entry.extra?.autonomy).toBe('14');
+ });
+});
+
+it('reads four left-aligned products without treating note numbers or voltage ranges as headings',()=>{
+ const row=(y:number,...pairs:[number,string][]):PositionedLine=>({y,cells:pairs.map(([x,text])=>({x,y,text,w:text.length*4,h:8}))});
+ const x=[190,300,410,520];
+ const data=(y:number,label:string,values:string[])=>row(y,[10,label],[140,'Note.6'],...values.map((v,j)=>[x[j]!,v] as [number,string]));
+ const grid=[row(200,[10,'MODEL'],...x.map((p,j)=>[p,'EX-'+(j+1)] as [number,string])),
+  data(180,'Charge voltage range',['12 ~ 17V','24 ~ 29V','48 ~ 53V','60 ~ 65V']),
+  data(160,'Max. output current (CC)',['17A','13A','8A','5A']),
+  data(140,'Efficiency',['91%','92%','93%','94%'])];
+ const {proposals}=catalogueFromDatasheet(page(['Example series']), 'example.pdf',new Map([[1,grid]]),new Map(),[type('charger')]);
+ expect(proposals.map(p=>[p.entry.model,p.entry.extra?.['dc-output-current'],p.entry.efficiency])).toEqual([
+  ['EX-1','17','0.91'],['EX-2','13','0.92'],['EX-3','8','0.93'],['EX-4','5','0.94']]);
+});
+
+describe('products set side by side, a column each',()=>{
+ const row=(y:number,...pairs:[number,string][]):PositionedLine=>({y,cells:pairs.map(([x,text])=>({x,y,text,w:text.length*4,h:8}))});
+ const x=[200,300,400];
+ const data=(y:number,label:string,values:string[])=>row(y,[10,label],...values.map((v,j)=>[x[j]!,v] as [number,string]));
+ const family=(y:number,caption:string,names:string[],amps:string[])=>[row(y,...(caption?[[10,caption] as [number,string]]:[]),...names.map((n,j)=>[x[j]!,n] as [number,string])),
+  data(y-20,'Rated current',amps),data(y-40,'Rated power',['4 kW','9 kW','15 kW']),data(y-60,'Rated voltage',['400 V','400 V','400 V'])];
+ const read=(grid:PositionedLine[])=>catalogueFromDatasheet(page(['Made-up range']),'made-up.pdf',new Map([[1,grid]]),new Map(),[type('motor')]).proposals.map(p=>[p.entry.model,p.entry.inA]);
+ it('keeps the first product when the top-left cell of the heading row is blank',()=>{
+  expect(read(family(200,'',['QX-1','QX-2','QX-3'],['10 A','20 A','30 A']))).toEqual([['QX-1','10'],['QX-2','20'],['QX-3','30']]);
+ });
+ it('reads a second heading row as other products, not more values for the first',()=>{
+  expect(read([...family(300,'2 poles',['QA-1','QA-2','QA-3'],['1 A','2 A','3 A']),...family(200,'4 poles',['QB-1','QB-2','QB-3'],['7 A','8 A','9 A'])]))
+   .toEqual([['QA-1','1'],['QA-2','2'],['QA-3','3'],['QB-1','7'],['QB-2','8'],['QB-3','9']]);
+ });
+});
