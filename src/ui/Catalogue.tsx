@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'preact/hooks';
-import {Upload,Plus,FileSpreadsheet,Trash2,ScanText,X,Check,Search,Network,ClipboardPaste,ExternalLink} from 'lucide-preact';
+import {Upload,Plus,FileSpreadsheet,Trash2,ScanText,X,Check,Search,Network,ClipboardPaste,ExternalLink,Sparkles,Copy,Braces} from 'lucide-preact';
 import {project,setLoads,notify} from './state';
 import {CATALOGUE_KEYS,emptyEntry,unique,sameText,type CatalogueKey} from '../engine/loads';
 import {clip,MAX_CELL} from '../engine/sheet';
@@ -8,6 +8,7 @@ import {readCatalogue,renderPage,closePage,pageCount,pageList,rangesOf} from '..
 import {readEquipment,mergeCatalogue,locate,reading,inColumn,type Box,type Proposal} from '../import/equipment';
 import {catalogueFromDatasheet,catalogueFromWeb,pageText,pickAt,redirectTarget,MAX_PAGE} from '../import/webpage';
 import {valueIn} from '../import/vocabulary';
+import {MAX_ANSWER,checkAnswer,copilotPrompt,pagesOf,readAnswer} from '../import/copilot';
 import {exportCatalogue} from '../export/equipment';
 import type {PageEvidence} from '../store/schema';
 import type {PositionedLine} from '../import/parse';
@@ -26,7 +27,8 @@ const SHOWN=300;
 const message=(e:unknown,fallback:string)=>e instanceof Error?e.message:fallback;
 // pdf and layout: the PDF read and its text positions, kept while reviewing so a row can be shown on its page.
 // types: the equipment types picked for this read, each holding only its ticked parameters.
-type Read={file:string;pages:PageEvidence[];ocr:number;proposals:Proposal[];brand:string;types:EquipmentType[];pdf?:File;layout?:Map<number,PositionedLine[]>};
+// copilot: the rows are an AI chat's answer, checked against the pages it named.
+type Read={file:string;pages:PageEvidence[];ocr:number;proposals:Proposal[];brand:string;types:EquipmentType[];pdf?:File;layout?:Map<number,PositionedLine[]>;copilot?:boolean};
 // The last equipment types and parameters picked, offered again on the next read this session.
 const lastPick=signal<Pick>({types:['motor'],on:{}});
 const MARK:Record<CatalogueKey,string>={brand:'Brand',model:'Model',config:'Config',ratedKw:'kW',protA:'Prot. A',inA:'In',un:'Un',efficiency:'η',pf:'PF',source:'Source'};
@@ -83,23 +85,24 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
  const missing=(p:Proposal,feeds:string,key='')=>{const x=typeOf(p)?.params.find(q=>q.required&&(key?q.key===key:q.feeds===feeds));return !!x&&!(x.feeds?p.entry[x.feeds]:p.entry.extra?.[x.key]??'').trim();};
  const missingRequired=(p:Proposal)=>typeOf(p)?.params.filter(q=>q.required&&!(q.feeds?p.entry[q.feeds]:p.entry.extra?.[q.key])?.trim()).length??0;
  const missingCount=picked.reduce((n,p)=>n+missingRequired(p),0);
- const unchecked=picked.reduce((a,p)=>a+p.unverified.filter(k=>takes(p,k)).length,0),guesses=picked.filter(p=>p.typeGuess).length,doubts=picked.filter(p=>p.doubt).length;
+ const unchecked=picked.reduce((a,p)=>a+p.unverified.filter(k=>takes(p,k)).length+(p.unverifiedExtra?.filter(k=>hasExtra(p,k)).length??0),0),guesses=picked.filter(p=>p.typeGuess).length,doubts=picked.filter(p=>p.doubt).length;
  // A catalogue can give thousands of rows: show them a page at a time so typing stays quick.
  // "Only rows to check" lists the rows with a red value (a model missing, a value not on its page, values that do not add up),
  // an amber one (values that do not work out with each other) or a type that two picked types fit equally.
- const list=rows.map((p,i)=>({p,i})).filter(x=>!only||x.p.unverified.length||x.p.typeGuess||x.p.doubt||missingRequired(x.p));
+ const list=rows.map((p,i)=>({p,i})).filter(x=>!only||x.p.unverified.length||x.p.unverifiedExtra?.length||x.p.typeGuess||x.p.doubt||missingRequired(x.p));
  const PAGE=200,last=Math.min(from+PAGE,list.length),all=rows.length>0&&picked.length===rows.length;
  // A value the engineer typed is theirs: it is no longer flagged as unchecked. Its row's sums are worked out again.
  const change=(i:number,f:(p:Proposal)=>Proposal)=>setRead({...read,proposals:rows.map((p,j)=>{if(j!==i)return p;const n=f(p);return withCheck(n,typeOf(n));})});
  const edit=(i:number,k:CatalogueKey,v:string)=>change(i,p=>({...p,entry:{...p.entry,[k]:clip(v)},unverified:p.unverified.filter(x=>x!==k)}));
- const editExtra=(i:number,key:string,v:string)=>change(i,p=>({...p,entry:{...p.entry,extra:{...p.entry.extra,[key]:clip(v)}}}));
+ const typed=(p:Proposal,key:string):Proposal=>{const {unverifiedExtra:u,...rest}=p,left=u?.filter(k=>k!==key);return left?.length?{...rest,unverifiedExtra:left}:rest;};
+ const editExtra=(i:number,key:string,v:string)=>change(i,p=>({...typed(p,key),entry:{...p.entry,extra:{...p.entry.extra,[key]:clip(v)}}}));
  const retype=(i:number,id:string)=>change(i,p=>({...p,entry:{...p.entry,type:id},typeGuess:false}));
  // A value the engineer clicked on the page: the row takes it, and the label printed before it is learned for this type.
  function teach(i:number,key:string,picked:{text:string;label:string},box:Omit<Box,'key'>):string {
   const p=rows[i],t=p&&typeOf(p),x=t?.params.find(q=>q.key===key);if(!p||!t||!x)return '';
   const v=valueIn(reading(x),picked.text,picked.label),value=v?x.feeds?inColumn(x.feeds,v.value):clip(v.value):'';
   if(!value)return `"${picked.text}" is not a ${x.label}${x.unit?` in ${x.unit}`:''}. Click the value itself.`;
-  change(i,q=>{const n:Proposal={...q,entry:x.feeds?{...q.entry,[x.feeds]:value}:{...q.entry,extra:{...q.entry.extra,[key]:value}},
+  change(i,q=>{const n:Proposal={...x.feeds?q:typed(q,key),entry:x.feeds?{...q.entry,[x.feeds]:value}:{...q.entry,extra:{...q.entry.extra,[key]:value}},
    unverified:q.unverified.filter(k=>k!==x.feeds),evidence:`${picked.label||x.label}: ${picked.text} (set on the page) · ${q.evidence}`.slice(0,300)};
    if(x.feeds&&q.boxes)n.boxes=[...q.boxes.filter(b=>b.key!==x.feeds),{key:x.feeds,...box}];return n;});
   if(!picked.label)return `${x.label} set to ${value}. No label is printed before it, so nothing was learned.`;
@@ -119,7 +122,7 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
   catch(e){notify(message(e,'Could not add the entries.'));}
  }
  return <div class="modal-backdrop"><section class="modal schematic-modal" role="dialog" aria-modal="true" aria-label="Review datasheet entries">
-  <div class="panel-heading"><div><div class="eyebrow">READ DATASHEET</div><h2>{read.file}</h2><p>{read.pages.length} page{read.pages.length===1?'':'s'} read{read.ocr?`, ${read.ocr} by OCR (check numbers carefully)`:''}. Tick the rows to add and fix anything misread. Red values were not found on the page they came from, or a row's kW, In, efficiency and power factor do not work out to its voltage. Amber values do not add up with the row's other values (a transformer's kVA, voltage and current, a motor's kW, current and power factor, efficiency and losses); point at one for the sum.{read.pdf?' Click a page number to see where each value was printed.':''}</p></div><button class="icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></div>
+  <div class="panel-heading"><div><div class="eyebrow">{read.copilot?'READ BY COPILOT':'READ DATASHEET'}</div><h2>{read.file}</h2><p>{read.copilot?`Copilot gave ${rows.length} row${rows.length===1?'':'s'}. Each value was looked for on the page Copilot named; compare the rows with the table in the PDF, as Copilot may have left some out. `:''}{read.pages.length} page{read.pages.length===1?'':'s'} read{read.ocr?`, ${read.ocr} by OCR (check numbers carefully)`:''}. Tick the rows to add and fix anything misread. Red values were not found on the page they came from, or a row's kW, In, efficiency and power factor do not work out to its voltage. Amber values do not add up with the row's other values (a transformer's kVA, voltage and current, a motor's kW, current and power factor, efficiency and losses); point at one for the sum.{read.pdf?' Click a page number to see where each value was printed.':''}</p></div><button class="icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></div>
   <div class="import-source"><label class="field"><span>Brand</span><input value={read.brand} maxLength={MAX_CELL} placeholder="Manufacturer name" onInput={e=>setRead({...read,brand:e.currentTarget.value})}/></label></div>
   <div class="schematic-table"><table><thead><tr><th><input type="checkbox" checked={all} aria-label="Add all rows" onChange={()=>setRead({...read,proposals:rows.map(x=>({...x,include:!all}))})}/></th><th>{HEADS.model}</th>{read.types.length>0&&<th>Equipment type</th>}
     {cols.map(k=><th key={k}>{HEADS[k]}</th>)}{extras.map(x=><th key={x.key}>{x.label}{x.unit?` (${x.unit})`:''}</th>)}<th>Page</th><th>Read from</th></tr></thead>
@@ -129,7 +132,7 @@ function Review({read,setRead,onClose}:{read:Read;setRead:(r:Read)=>void;onClose
       <input value={off?'':p.entry[k]} disabled={off} aria-label={`${HEADS[k]}, row ${i+1}`} maxLength={MAX_CELL} onInput={e=>edit(i,k,e.currentTarget.value)}/></td>
       {k==='model'&&read.types.length>0&&<td class={`cell ${p.typeGuess?'bad':''}`} title={p.typeGuess?'Two of the picked types fit this row equally well. Check its type.':undefined}>
        <select value={p.entry.type??''} aria-label={`Equipment type, row ${i+1}`} onChange={e=>retype(i,e.currentTarget.value)}>{read.types.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></td>}</Fragment>;})}
-    {extras.map(x=>{const off=!hasExtra(p,x.key),need=!off&&missing(p,'',x.key),doubt=!off&&!!p.doubt?.keys.includes(x.key);return <td key={x.key} class={`cell ${need?'bad':doubt?'doubt':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not have this parameter.`:need?'Required for this equipment type. Type it from the datasheet.':doubt?p.doubt!.why:undefined}>
+    {extras.map(x=>{const off=!hasExtra(p,x.key),need=!off&&missing(p,'',x.key),bad=!off&&!!p.unverifiedExtra?.includes(x.key),doubt=!off&&!!p.doubt?.keys.includes(x.key);return <td key={x.key} class={`cell ${need||bad?'bad':doubt?'doubt':''} ${off?'off-cell':''}`} title={off?`${t?.name??'This type'} does not have this parameter.`:need?'Required for this equipment type. Type it from the datasheet.':bad?`Not found on page ${p.page||'?'}. Check the PDF.`:doubt?p.doubt!.why:undefined}>
      <input value={off?'':p.entry.extra?.[x.key]??''} disabled={off} aria-label={`${x.label}, row ${i+1}`} maxLength={MAX_CELL} onInput={e=>editExtra(i,x.key,e.currentTarget.value)}/></td>;})}
     <td>{p.page&&read.pdf?<button class="text-button" title="Show where these values are on the page" onClick={()=>setView(i)}>p. {p.page}</button>:p.page||'—'}</td><td class="evidence" title={[p.note,p.doubt?.why,p.evidence].filter(Boolean).join(' ')}>{p.note?`⚠ ${p.note} `:''}{p.doubt?`⚠ ${p.doubt.why} `:''}{p.evidence}</td></tr>;})}</tbody></table>
    {!rows.length&&<p class="sheet-empty">No values found for the picked equipment types' parameters. Check the types and parameters picked, or add a row and type the values from the PDF.</p>}</div>
@@ -189,10 +192,44 @@ function PastePage({onRead,onClose}:{onRead:(text:string,source:string)=>void;on
  </section></div>;
 }
 
+// The organisation's own AI chat (Copilot or another it allows) reads the datasheet; this page gives it the prompt and checks
+// its answer against the same file. Nothing is sent anywhere from here: the engineer copies the prompt over and pastes the
+// answer back.
+function AskCopilot({types,busy,onRead,onClose}:{types:readonly EquipmentType[];busy:boolean;onRead:(file:File,answer:string)=>void;onClose:()=>void}) {
+ const input=useRef<HTMLInputElement>(null),json=useRef<HTMLInputElement>(null),box=useRef<HTMLTextAreaElement>(null);
+ const [file,setFile]=useState<File|null>(null),[total,setTotal]=useState(0),[pages,setPages]=useState(''),[answer,setAnswer]=useState(''),[copied,setCopied]=useState(false);
+ let list:number[]=[],bad='';if(total&&pages.trim())try{list=pageList(pages,total);}catch(e){bad=message(e,'Check the pages.');}
+ const prompt=copilotPrompt(types,rangesOf(list));
+ useEffect(()=>{setCopied(false);},[prompt]);
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();onClose();}};addEventListener('keydown',key,true);return ()=>removeEventListener('keydown',key,true);},[onClose]);
+ async function choose(f:File){setFile(f);setTotal(0);setPages('');try{if(/\.pdf$/i.test(f.name))setTotal(await pageCount(f));}catch(e){setFile(null);notify(message(e,'Could not open the file.'));}}
+ async function copy(){try{await navigator.clipboard.writeText(prompt);setCopied(true);}catch{box.current?.select();notify('Copy the selected prompt with Ctrl+C or ⌘C.');}}
+ async function load(f:File){try{if(f.size>MAX_ANSWER)throw Error('The file is larger than 1 MB.');setAnswer(await f.text());}catch(e){notify(message(e,'Could not open the file.'));}finally{if(json.current)json.current.value='';}}
+ return <div class="modal-backdrop"><section class="modal small-modal paste-page ask-copilot" role="dialog" aria-modal="true" aria-label="Read a datasheet with Copilot">
+  <input ref={input} class="visually-hidden" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" aria-label="Choose the datasheet" onChange={e=>{const f=e.currentTarget.files?.[0];e.currentTarget.value='';if(f)void choose(f);}}/>
+  <input ref={json} class="visually-hidden" type="file" accept=".json,.txt" aria-label="Open Copilot's answer" onChange={e=>{const f=e.currentTarget.files?.[0];if(f)void load(f);}}/>
+  <div class="panel-heading"><div><div class="eyebrow">READ WITH COPILOT</div><h2>Let Copilot read the datasheet</h2></div><button class="icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></div>
+  <ol class="ask-steps">
+   <li><b>Choose the datasheet.</b> Give Copilot this same file, so the pages it names are the pages checked here.
+    <div class="ask-row"><button class="button secondary small" onClick={()=>input.current?.click()}><Upload size={14}/>{file?'Choose another file':'Choose file'}</button><span class="muted">{file?`${file.name}${total?` · ${total} page${total===1?'':'s'}`:''}`:'No file chosen'}</span></div>
+    {total>1&&<label class="field"><span>Pages for Copilot to read (optional)</span><input value={pages} placeholder="For example 12, 40-45" aria-invalid={!!bad} onInput={e=>setPages(e.currentTarget.value)}/></label>}
+    {bad&&<span class="form-error">{bad}</span>}</li>
+   <li><b>Copy the prompt</b>, open Copilot, attach the file, paste the prompt and send it. For a long table, ask for 1 to 3 pages at a time.
+    <div class="ask-row"><button class="button secondary small" onClick={()=>void copy()}><Copy size={14}/>{copied?'Copied':'Copy prompt'}</button></div>
+    <textarea ref={box} readOnly class="ask-prompt" aria-label="Prompt for Copilot" value={prompt}/></li>
+   <li><b>Paste Copilot's answer</b> here, or open it saved as a .json file.
+    <textarea aria-label="Copilot's answer" placeholder='{"brand": "…", "rows": […]}' value={answer} maxLength={MAX_ANSWER} onInput={e=>setAnswer(e.currentTarget.value)}/>
+    <div class="ask-row"><button class="button ghost small" onClick={()=>json.current?.click()}><Braces size={14}/>Open .json file</button></div></li>
+  </ol>
+  <p class="muted">This website runs no AI and sends nothing anywhere; Copilot works in your organisation's own account. Every value Copilot gives is looked for on the page it names, and anything not printed there is red for you to check.</p>
+  <div class="modal-actions"><button class="button secondary small" onClick={onClose}>Cancel</button><button class="button primary small" disabled={!file||!answer.trim()||busy||!!bad} onClick={()=>{if(file)onRead(file,answer);}}><Check size={15}/>Check against the datasheet</button></div>
+ </section></div>;
+}
+
 export function Catalogue() {
  const cat=project.value.loads.catalogue,book=useRef<HTMLInputElement>(null),pdf=useRef<HTMLInputElement>(null),stop=useRef<AbortController|null>(null);
  const [busy,setBusy]=useState(''),[read,setRead]=useState<Read|null>(null),[brand,setBrand]=useState(''),[q,setQ]=useState(''),[pasting,setPasting]=useState(false);
- const [choosing,setChoosing]=useState<'pdf'|'paste'|null>(null),chosen=useRef<EquipmentType[]>([]),[picking,setPicking]=useState<{file:File;total:number}|null>(null);
+ const [choosing,setChoosing]=useState<'pdf'|'paste'|'copilot'|null>(null),chosen=useRef<EquipmentType[]>([]),[picking,setPicking]=useState<{file:File;total:number}|null>(null),[asking,setAsking]=useState(false);
  const learned=project.value.loads.learned.length,types=allTypes(project.value.loads.types),typeName=(id?:string)=>types.find(t=>t.id===id)?.name.trim();
  // An entry's catalogue-only values, named by its type's parameters.
  const others=(e:CatalogueRow)=>{const t=types.find(x=>x.id===e.type);return Object.entries(e.extra??{}).map(([k,v])=>{const p=t?.params.find(x=>x.key===k);return `${p?.label||k}: ${v}${p?.unit?` ${p.unit}`:''}`;}).join('; ');};
@@ -201,7 +238,18 @@ export function Catalogue() {
  const set=(i:number,k:CatalogueKey,v:string)=>{const next=[...cat];next[i]={...next[i]!,[k]:clip(v)};setLoads({catalogue:next},`cat:${i}:${k}`);};
  const setType=(i:number,id:string)=>{const next=[...cat],e={...next[i]!};if(id)e.type=id;else delete e.type;next[i]=e;setLoads({catalogue:next});};
  // The picker comes first; then the file chooser or the paste box, with the types picked.
- function chose(t:EquipmentType[]){chosen.current=withLearned(t,project.value.loads.learned);const c=choosing;setChoosing(null);if(c==='pdf')pdf.current?.click();else setPasting(true);}
+ function chose(t:EquipmentType[]){chosen.current=withLearned(t,project.value.loads.learned);const c=choosing;setChoosing(null);if(c==='pdf')pdf.current?.click();else if(c==='copilot')setAsking(true);else setPasting(true);}
+ // Copilot's answer, checked against the pages it names in the same file.
+ async function fromCopilot(f:File,answer:string){
+  const ctl=new AbortController();stop.current=ctl;setBusy('Checking Copilot\'s answer against the datasheet…');
+  try{const types=chosen.current,a=readAnswer(answer,types),cited=pagesOf(a),isPdf=/\.pdf$/i.test(f.name);
+   if(!cited.length)throw Error('Copilot gave no page for any row, so nothing can be checked against the datasheet. Ask it to give the page of each row, then paste the answer again.');
+   const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment',isPdf?cited:undefined);
+   setAsking(false);
+   setRead({file:f.name,pages:doc.pages,ocr:doc.pages.filter(p=>p.mode==='ocr').length,proposals:checkAll(checkAnswer(a,doc.pages,f.name),types),brand:brand||a.brand,types,copilot:true,...(isPdf?{pdf:f,layout:doc.layout}:{})});
+   if(a.ignored)notify(`${a.ignored} item${a.ignored===1?'':'s'} in Copilot's answer ${a.ignored===1?'is':'are'} not for the picked types and parameters, so ${a.ignored===1?'it was':'they were'} left out.`);}
+  catch(e){notify(message(e,'Could not read the answer.'));}finally{setBusy('');stop.current=null;}
+ }
  async function openBook(f:File){
   setBusy('Reading the catalogue…');
   try{const r=readEquipment(await readTables(f),f.name);if(!r.catalogue.length)throw Error('No catalogue rows found. The sheet needs a Model / Part Number column; sheets named "Brand (Name)" take the brand from their name.');
@@ -231,12 +279,14 @@ export function Catalogue() {
   {read&&<Review read={read} setRead={setRead} onClose={()=>{closePage();setRead(null);}}/>}
   {pasting&&<PastePage onRead={fromWeb} onClose={()=>setPasting(false)}/>}
   {picking&&<PagePicker file={picking.file} total={picking.total} onRead={pages=>{setPicking(null);void openPdf(picking.file,pages??null);}} onClose={()=>{setPicking(null);closePage();}}/>}
-  {choosing&&<TypePicker pick={lastPick.value} setPick={p=>{lastPick.value=p;}} action={choosing==='pdf'?'Choose file':'Paste the page'} onContinue={chose} onClose={()=>setChoosing(null)}/>}
+  {asking&&<AskCopilot types={chosen.current} busy={!!busy} onRead={(f,a)=>void fromCopilot(f,a)} onClose={()=>{setAsking(false);closePage();}}/>}
+  {choosing&&<TypePicker pick={lastPick.value} setPick={p=>{lastPick.value=p;}} action={choosing==='pdf'?'Choose file':choosing==='copilot'?'Continue':'Paste the page'} onContinue={chose} onClose={()=>setChoosing(null)}/>}
   {busy&&<div class="reading-bar" role="status"><Network size={15}/><span>{busy}</span>{stop.current&&<button class="button secondary small" onClick={()=>stop.current?.abort()}>Cancel</button>}</div>}
   <div class="sheet-section-head"><div><h2>Brand catalogue</h2><p>One row per Brand + Model + Configuration. A load list row that picks them fills in the rest. Saved with the project; export it to reuse in other projects.</p></div>
    <div class="page-actions"><button class="button secondary small" disabled={!!busy} onClick={()=>book.current?.click()}><Upload size={15}/>Import catalogue</button>
     <button class="button secondary small" disabled={!!busy} onClick={()=>setChoosing('pdf')} title="PDF, scanned image or saved web page (.html); text is read on this computer"><ScanText size={15}/>Read datasheet</button>
     <button class="button secondary small" disabled={!!busy} onClick={()=>setChoosing('paste')} title="Copy a vendor's product page and paste it here"><ClipboardPaste size={15}/>Paste web page</button>
+    <button class="button secondary small" disabled={!!busy} onClick={()=>setChoosing('copilot')} title="Let your organisation's Copilot read a datasheet; every value it gives is checked against the PDF here"><Sparkles size={15}/>Read with Copilot</button>
     <button class="button secondary small" onClick={()=>{setLoads({catalogue:[...cat,{...emptyEntry(),brand}]});setQ('');}}><Plus size={15}/>Add entry</button>
     {learned>0&&<button class="button ghost small" title="Labels learned when you corrected a value by clicking it on a datasheet page. Undo brings them back." onClick={()=>{setLoads({learned:[]});notify(`Forgot ${learned} learned label${learned===1?'':'s'}.`);}}>Forget {learned} learned label{learned===1?'':'s'}</button>}
     <button class="button secondary small" disabled={!cat.length} onClick={()=>void exportCatalogue(cat,project.value.name).catch((e:unknown)=>notify(message(e,'Export failed.')))}><FileSpreadsheet size={15}/>Export catalogue</button></div></div>
@@ -253,6 +303,6 @@ export function Catalogue() {
     <td class="row-tools"><button class="icon-button danger" aria-label={`Delete entry ${i+1}`} title="Delete entry" onClick={()=>setLoads({catalogue:cat.filter((_,j)=>j!==i)})}><Trash2 size={13}/></button></td></tr>;})}</tbody>
   </table>{!shown.length&&<p class="sheet-empty">No entries match.</p>}</div>
   :<section class="panel list-empty"><ScanText size={26}/><h2>No catalogue yet</h2><p>Import a catalogue workbook (sheets named "Brand (Name)" or any sheet with a Model / Part Number column), read a manufacturer's PDF datasheet, or add entries by hand.</p>
-   <p>PDFs are read on this computer: the text layer first, and OCR for scanned pages. For a vendor's web page, use Paste web page: copy the page in your browser and paste it. You check every value before it is added.</p></section>}
+   <p>PDFs are read on this computer: the text layer first, and OCR for scanned pages. For a vendor's web page, use Paste web page: copy the page in your browser and paste it. For a datasheet these do not read well, use Read with Copilot: your organisation's Copilot reads it, and every value it gives is checked against the PDF. You check every value before it is added.</p></section>}
  </>;
 }

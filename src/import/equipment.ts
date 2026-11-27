@@ -204,7 +204,9 @@ export type Box={key:CatalogueKey;x0:number;x1:number;y:number;h:number};
 // note: why In and Un are flagged when a row's values do not work out to its voltage.
 // typeGuess: two of the picked equipment types fit the row equally well, so its type is for the engineer to choose.
 // doubt: the parameters (by key) whose values do not add up with each other, and the sums worked out (checks.ts).
-export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean;boxes?:Box[];note?:string;typeGuess?:boolean;doubt?:{keys:string[];why:string}};
+// unverifiedExtra: the catalogue-only parameters (by key) whose values were not found on the page, as unverified does for
+// the load list columns.
+export type Proposal={entry:CatalogueRow;page:number;evidence:string;unverified:CatalogueKey[];include:boolean;boxes?:Box[];note?:string;typeGuess?:boolean;doubt?:{keys:string[];why:string};unverifiedExtra?:string[]};
 const takes=(t:EquipmentType)=>new Set(t.params.map(p=>p.feeds).filter(Boolean));
 // Rows read from a catalogue the user said covers these equipment types, each holding only its ticked parameters. Every row
 // takes the type whose load list columns best match the values found on it: a value the type takes counts for it, one it
@@ -296,10 +298,15 @@ export function catalogueFromPages(pages:readonly PageEvidence[],file:string):Pr
  return out;
 }
 const esc=(s:string)=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+// Whether a figure is printed on a page. Numbers on the page are compared as numbers: "0.80" and "13.50" there are the
+// 0.8 and 13.5 stored.
+export function onPage(text:string):(v:string)=>boolean {
+ const nums=text.replace(/(\d),(\d)/g,'$1.$2').replace(/\d+(?:\.\d+)?/g,m=>String(Number(m)));
+ return v=>new RegExp(`(?<![\\d.])${esc(v)}(?![\\d.]*\\d)`).test(nums);
+}
 // The values not written on the page they are said to come from (a misread or a model's guess), for the engineer to check.
 export function verify(e:CatalogueRow,text:string):CatalogueKey[] {
- // Numbers on the page are compared as numbers: "0.80" and "13.50" there are the 0.8 and 13.5 stored.
- const t=text.replace(/(\d),(\d)/g,'$1.$2'),nums=t.replace(/\d+(?:\.\d+)?/g,m=>String(Number(m))),has=(v:string)=>new RegExp(`(?<![\\d.])${esc(v)}(?![\\d.]*\\d)`).test(nums),bad:CatalogueKey[]=[];
+ const t=text.replace(/(\d),(\d)/g,'$1.$2'),has=onPage(text),bad:CatalogueKey[]=[];
  if(e.model&&!t.toLowerCase().includes(e.model.toLowerCase()))bad.push('model');
  for(const k of ['ratedKw','protA','inA','efficiency','pf'] as const){const v=e[k].trim();if(!v)continue;const n=num(v);
   const forms=n===null?[v]:[String(n),...(n<1?[String(+(n*100).toFixed(4))]:[])];if(!forms.some(has))bad.push(k);}

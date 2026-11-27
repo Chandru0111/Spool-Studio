@@ -281,3 +281,6 @@ button.link{border:0;background:none;padding:0;color:var(--accent);font:inherit;
 /* Page view, correcting a value: every printed item can be clicked; the bar picks the parameter it is for. */
 .teach-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 12px;margin-top:10px}.teach-bar .field{min-width:220px}.teach-bar>span{flex:1 1 260px;font-size:12px;padding-bottom:7px}
 .page-item{position:absolute;padding:0;border:1px dashed var(--info-line);border-radius:2px;background:transparent;cursor:crosshair}.page-item:hover,.page-item:focus-visible{border:2px solid var(--info);background:color-mix(in srgb,var(--info) 14%,transparent);outline:none}
+/* Read with Copilot: the steps to give Copilot the file and prompt, and paste its answer back. */
+.ask-copilot{width:640px}.paste-page ol.ask-steps{gap:16px;font-size:12.5px}.ask-steps li>b{font-weight:600}.ask-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0}
+.ask-steps .field{margin:6px 0 0}.paste-page textarea.ask-prompt{min-height:120px;font-family:PlexMono,monospace;font-size:11px;color:var(--muted)}

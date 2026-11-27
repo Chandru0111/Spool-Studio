@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "a8a07b862e72417a4f9c452a87ec4b9c89ebe62e1165c8dd9d3f9129ba1b478c",
+  "sourceFingerprint": "61e41f05b8406243dd30a3a30a7b1aad198df483627a22306ceba937f181a751",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -469,6 +469,7 @@
       "src/export/equipment.ts",
       "src/export/template.ts",
       "src/import/checks.ts",
+      "src/import/copilot.ts",
       "src/import/document.ts",
       "src/import/drawing-ocr.ts",
       "src/import/drum-catalogue.ts",
@@ -649,6 +650,26 @@
       {
         "file": "tests/completion.test.ts",
         "name": "restores v2 input state, recomputes results and rejects incompatible or invalid geometry"
+      },
+      {
+        "file": "tests/copilot.test.ts",
+        "name": "asks for each picked type by its id, with the keys and units to give and the pages to read"
+      },
+      {
+        "file": "tests/copilot.test.ts",
+        "name": "takes the values in the catalogue form and marks red each one not printed on the page it names"
+      },
+      {
+        "file": "tests/copilot.test.ts",
+        "name": "reads a bare figure in the unit asked for, and an efficiency given in % against one printed as a fraction"
+      },
+      {
+        "file": "tests/copilot.test.ts",
+        "name": "names the type by the values when the answer leaves it out, and marks a row red whose page the file does not have"
+      },
+      {
+        "file": "tests/copilot.test.ts",
+        "name": "refuses an answer it cannot read, saying what to do"
       },
       {
         "file": "tests/drawing.test.ts",
@@ -1294,8 +1315,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-26T02:26:21.660Z",
-    "sourceFingerprint": "a8a07b862e72417a4f9c452a87ec4b9c89ebe62e1165c8dd9d3f9129ba1b478c",
+    "checkedAt": "2026-11-27T05:17:01.866Z",
+    "sourceFingerprint": "61e41f05b8406243dd30a3a30a7b1aad198df483627a22306ceba937f181a751",
     "status": "passed",
     "steps": [
       {
@@ -1306,7 +1327,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  19 passed (19); Tests  210 passed (210)"
+        "summary": "Test Files  20 passed (20); Tests  215 passed (215)"
       },
       {
         "command": "npm run build",
@@ -1374,7 +1395,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "1e878e60c464cd3a75381a78bba30e18eda09cd37753e8aa4262cd06d6414cc1",
+      "sha256": "2e1246d71017748f35e4298544c572db6cd9547956ad2016393a88f6db06c4f0",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1841,6 +1862,32 @@
       "runtime": true
     },
     {
+      "path": "src/import/copilot.ts",
+      "bytes": 9454,
+      "sha256": "d00d93d88607106ff99d29a1d53f05fcae5f718905d9a1753780da99f5185db1",
+      "role": "Project configuration.",
+      "exports": [
+        "AiRead",
+        "AiRow",
+        "AiValue",
+        "MAX_AI_ROWS",
+        "MAX_ANSWER",
+        "checkAnswer",
+        "copilotPrompt",
+        "pagesOf",
+        "readAnswer"
+      ],
+      "imports": [
+        "../engine/equipment-types",
+        "../engine/loads",
+        "../engine/sheet",
+        "../store/schema",
+        "./equipment",
+        "./vocabulary"
+      ],
+      "runtime": true
+    },
+    {
       "path": "src/import/document.ts",
       "bytes": 11808,
       "sha256": "a0e5d82fb8bba2f974c512fe4983499c413adc996d315b29aacb789124eac2ad",
@@ -1906,8 +1953,8 @@
     },
     {
       "path": "src/import/equipment.ts",
-      "bytes": 26542,
-      "sha256": "369b86800d88fd171a7eda0758d824f75cf3983a83ebbddc7499e63abad6b1c7",
+      "bytes": 26872,
+      "sha256": "f5091bae0f89d808fd0c72bfce0ef61c434db5f1b855976e6ab27c16b0216210",
       "role": "Equipment-list workbook import (panel sheets, brand catalogue sheets, factors and margin, view-sheet and heading-row skipping), catalogue/panel merging, Send to cable sizing mapping and merge, and datasheet proposals from PDF/OCR text or a local model reply with per-value page verification. Proposal.doubt holds the parameters whose values do not add up with each other and the sums worked out (checks.ts).",
       "exports": [
         "Box",
@@ -1924,6 +1971,7 @@
         "mergeCatalogue",
         "mergePanels",
         "mergeSizing",
+        "onPage",
         "readEquipment",
         "reading",
         "toSizing",
@@ -2314,8 +2362,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 34190,
-      "sha256": "6b75b5e7e2ee91e07e3f6a34d7e1ef7b31f1b7d11a197bc0b1e86b705285919e",
+      "bytes": 41529,
+      "sha256": "9aadf2120a773058e78b9a8d8b3193540c605f0157bb61018205a9e5eccd2890",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet. Amber cells for values that do not add up (checks.ts), rechecked on every edit. In the page view a parameter can be picked and its value clicked: the row takes it and the label printed before it is learned for that equipment type (project loads.learned; Forget learned labels clears them, Undo restores).",
       "exports": [
         "Catalogue"
@@ -2326,6 +2374,7 @@
         "../engine/sheet",
         "../export/equipment",
         "../import/checks",
+        "../import/copilot",
         "../import/document",
         "../import/equipment",
         "../import/load-list",
@@ -2568,8 +2617,8 @@
     },
     {
       "path": "src/ui/app.css",
-      "bytes": 104513,
-      "sha256": "c4a3baecbc11d836eb32dabcc6017b72bca2353e7c1b4c1713f6bcbf4648868c",
+      "bytes": 104951,
+      "sha256": "78fa877bb38ce63cdc0f54f2668215dffc840cde0b44a7de47e2f8d944731d39",
       "role": "Token-based theme: light warm-paper/graphite/safety-orange default and a graphite dark theme under :root[data-theme=dark], workbook legend tokens for sheet headers, dashboard/drawer/calculation/drum styles and @media print report styles. All screen colours are CSS variables; older unused selectors remain from the rebuild.",
       "runtime": true
     },
@@ -2759,6 +2808,27 @@
         "reports overlong runs and rejects bending, invalid geometry and excessive counts",
         "marks incomplete electrical designs as preliminary quantities and omits invalid inputs",
         "restores v2 input state, recomputes results and rejects incompatible or invalid geometry"
+      ],
+      "runtime": false
+    },
+    {
+      "path": "tests/copilot.test.ts",
+      "bytes": 5105,
+      "sha256": "e9c15e3fb4913c876e8cd076656a17560d779298cc6a6418ffcc8494cbca359f",
+      "role": "Regression test or fixture.",
+      "exports": [],
+      "imports": [
+        "../src/engine/equipment-types",
+        "../src/import/copilot",
+        "../src/store/schema",
+        "vitest"
+      ],
+      "tests": [
+        "asks for each picked type by its id, with the keys and units to give and the pages to read",
+        "takes the values in the catalogue form and marks red each one not printed on the page it names",
+        "reads a bare figure in the unit asked for, and an efficiency given in % against one printed as a fraction",
+        "names the type by the values when the answer leaves it out, and marks a row red whose page the file does not have",
+        "refuses an answer it cannot read, saying what to do"
       ],
       "runtime": false
     },
@@ -3521,6 +3591,42 @@
       "resolved": true
     },
     {
+      "from": "src/import/copilot.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/copilot.ts",
+      "to": "src/engine/loads.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/copilot.ts",
+      "to": "src/engine/sheet.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/copilot.ts",
+      "to": "src/store/schema.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/copilot.ts",
+      "to": "src/import/equipment.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/import/copilot.ts",
+      "to": "src/import/vocabulary.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
       "from": "src/import/document.ts",
       "to": "src/store/schema.ts",
       "relation": "imports",
@@ -3983,6 +4089,12 @@
     {
       "from": "src/ui/Catalogue.tsx",
       "to": "src/import/checks.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "src/ui/Catalogue.tsx",
+      "to": "src/import/copilot.ts",
       "relation": "imports",
       "resolved": true
     },
@@ -4756,6 +4868,29 @@
       "relation": "external"
     },
     {
+      "from": "tests/copilot.test.ts",
+      "to": "src/engine/equipment-types.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/copilot.test.ts",
+      "to": "src/import/copilot.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/copilot.test.ts",
+      "to": "src/store/schema.ts",
+      "relation": "imports",
+      "resolved": true
+    },
+    {
+      "from": "tests/copilot.test.ts",
+      "to": "vitest",
+      "relation": "external"
+    },
+    {
       "from": "tests/drawing.test.ts",
       "to": "src/import/drawing-ocr.ts",
       "relation": "imports",
@@ -5297,32 +5432,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-26T02:26:21.737Z",
+  "updatedAt": "2026-11-27T05:17:01.941Z",
   "history": [
-    {
-      "at": "2026-11-26T02:02:12.105Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-26T02:02:40.417Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-26T02:02:59.884Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-26T02:03:55.171Z",
       "added": [],
@@ -5389,6 +5500,35 @@
     },
     {
       "at": "2026-11-26T02:26:21.737Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-27T02:59:07.906Z",
+      "added": [
+        "src/import/copilot.ts",
+        "tests/copilot.test.ts"
+      ],
+      "modified": [
+        "src/import/equipment.ts",
+        "src/ui/Catalogue.tsx",
+        "src/ui/app.css"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-27T02:59:08.824Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-27T05:17:01.941Z",
       "added": [],
       "modified": [
         "docs/verification.json"
