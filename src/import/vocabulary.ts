@@ -158,7 +158,7 @@ const WITH_NUMBER=new RegExp(`(?<![\\p{L}\\d.,])\\d+(?:[.,]\\d+)?(?:\\s*(?:[-–
 // alone: a unit printed in a heading ("Weight (kg)", "Speed [rpm]", "Current / A", or "kg" on a line of its own), not the
 // end of another unit ("r/min").
 const ALONE=new RegExp(`(?:^|[(\\[]\\s*|\\s\\/\\s*)(${KEYS})\\s*(?:$|[)\\]])`,'giu');
-const unitsIn=(text:string,alone=false)=>(alone?text.split('\n').flatMap(l=>[...l.trim().matchAll(ALONE)]):[...text.matchAll(WITH_NUMBER)]).flatMap(m=>{const u=unitOf(m[1]!);return u?[u]:[];});
+export const unitsIn=(text:string,alone=false)=>(alone?text.split('\n').flatMap(l=>[...l.trim().matchAll(ALONE)]):[...text.matchAll(WITH_NUMBER)]).flatMap(m=>{const u=unitOf(m[1]!);return u?[u]:[];});
 
 // Optimal string alignment distance: one letter missed, added, changed or two swapped is one edit, the slips of OCR and
 // hurried typing. Letters OCR takes for each other (0 and o, 1 and l…) cost half an edit.

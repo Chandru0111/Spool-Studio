@@ -6,7 +6,7 @@
     "version": "0.2.0",
     "root": "."
   },
-  "sourceFingerprint": "61e41f05b8406243dd30a3a30a7b1aad198df483627a22306ceba937f181a751",
+  "sourceFingerprint": "fe5d9a732d0267bd369d3fc6470d9699f2a55911c00ea37c7d163ccc3e5003ba",
   "readFirst": [
     "knowledge.scopeDecision",
     "knowledge.quickStart",
@@ -653,19 +653,23 @@
       },
       {
         "file": "tests/copilot.test.ts",
-        "name": "asks for each picked type by its id, with the keys and units to give and the pages to read"
+        "name": "asks for every value under its printed heading, with the pages to read"
       },
       {
         "file": "tests/copilot.test.ts",
-        "name": "takes the values in the catalogue form and marks red each one not printed on the page it names"
+        "name": "picks the ticked parameters out of every value copied, and marks red each one not printed on the page it names"
       },
       {
         "file": "tests/copilot.test.ts",
-        "name": "reads a bare figure in the unit asked for, and an efficiency given in % against one printed as a fraction"
+        "name": "reads a bare figure in the parameter's unit, a unit in the heading, and a label the engineer taught"
       },
       {
         "file": "tests/copilot.test.ts",
-        "name": "names the type by the values when the answer leaves it out, and marks a row red whose page the file does not have"
+        "name": "reads a thousands comma by the answer's decimals, and leaves a parameter two headings give differently for the engineer"
+      },
+      {
+        "file": "tests/copilot.test.ts",
+        "name": "names the type by the values, and marks a row red whose page the file does not have"
       },
       {
         "file": "tests/copilot.test.ts",
@@ -1315,8 +1319,8 @@
     }
   },
   "verification": {
-    "checkedAt": "2026-11-27T05:17:01.866Z",
-    "sourceFingerprint": "61e41f05b8406243dd30a3a30a7b1aad198df483627a22306ceba937f181a751",
+    "checkedAt": "2026-11-27T07:38:45.898Z",
+    "sourceFingerprint": "fe5d9a732d0267bd369d3fc6470d9699f2a55911c00ea37c7d163ccc3e5003ba",
     "status": "passed",
     "steps": [
       {
@@ -1327,7 +1331,7 @@
       {
         "command": "npm run test",
         "exitCode": 0,
-        "summary": "Test Files  20 passed (20); Tests  215 passed (215)"
+        "summary": "Test Files  20 passed (20); Tests  216 passed (216)"
       },
       {
         "command": "npm run build",
@@ -1395,7 +1399,7 @@
     {
       "path": "docs/verification.json",
       "bytes": 774,
-      "sha256": "2e1246d71017748f35e4298544c572db6cd9547956ad2016393a88f6db06c4f0",
+      "sha256": "a9224477eb88717336178dc5aca27a2e2b0afeb432917252167b3ae9f057f69c",
       "role": "Project documentation.",
       "runtime": false
     },
@@ -1863,8 +1867,8 @@
     },
     {
       "path": "src/import/copilot.ts",
-      "bytes": 9454,
-      "sha256": "d00d93d88607106ff99d29a1d53f05fcae5f718905d9a1753780da99f5185db1",
+      "bytes": 12593,
+      "sha256": "69a7f6d5960aae3a8b25fc49a9fd185b204c4a53603aa9cf2ab388e5b3ab732e",
       "role": "Project configuration.",
       "exports": [
         "AiRead",
@@ -2206,8 +2210,8 @@
     },
     {
       "path": "src/import/vocabulary.ts",
-      "bytes": 29485,
-      "sha256": "a0342b4004ac096120da0274f1a413a5b5f3bee5f9a64ace7f4a80f9c4cc894c",
+      "bytes": 29492,
+      "sha256": "70ddf572c7ac74e69598fb0426105e4839834e07392d8d4f1a88d6bdf2af4260",
       "role": "Rating-table field vocabulary as data: words for kW, current, voltage, efficiency, power factor, speed, poles, type/series names, part codes, frame sizes and not-load-data columns in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Russian and Chinese, plus symbols and units matched as printed; fieldsIn scores a heading line (longest phrase first, abbreviations by prefix). nameScore matches any equipment type's parameter to a printed label three ways: by the quantity both name in any vocabulary word (Rated power for Rated output, FLA for Rated current) with every other word printed, by the parameter's own words (fuzzy OSA distance for OCR slips, bracketed words optional), or by a symbol printed (In, Ue, Icu; another symbol of the same quantity rejects); units must agree. namesQuantity, unitNames (kvar, kVA, lm name their quantity alone) and users' own units serve the readers. Words printed for one another (HV/high, LV/low, Specs/standard) are alike; a load point (75 % load, full load) is not part of a name while no-load stays one word; what follows \"at\" in a printed label is its condition and never makes it another parameter. A label the engineer taught by clicking its value (Param.labels) names its parameter before any other route.",
       "exports": [
         "Field",
@@ -2225,6 +2229,7 @@
         "unitIn",
         "unitNames",
         "unitOf",
+        "unitsIn",
         "valueIn"
       ],
       "imports": [],
@@ -2362,8 +2367,8 @@
     },
     {
       "path": "src/ui/Catalogue.tsx",
-      "bytes": 41529,
-      "sha256": "9aadf2120a773058e78b9a8d8b3193540c605f0157bb61018205a9e5eccd2890",
+      "bytes": 41467,
+      "sha256": "b477f7210ba263070f29a54ad1fd412e9e817fda717554b5850a4d560b01a7b6",
       "role": "Brand catalogue view: editable entries, brand filter and search, workbook import, export, and the datasheet review dialog (text/OCR or local AI, red unverified values, only-rows-to-check filter, page view with a box round each value read, tick to add; blank models and repeated model + configuration refused). Paste web page dialog (clipboard HTML) and .html files through Read datasheet. Amber cells for values that do not add up (checks.ts), rechecked on every edit. In the page view a parameter can be picked and its value clicked: the row takes it and the label printed before it is learned for that equipment type (project loads.learned; Forget learned labels clears them, Undo restores).",
       "exports": [
         "Catalogue"
@@ -2813,8 +2818,8 @@
     },
     {
       "path": "tests/copilot.test.ts",
-      "bytes": 5105,
-      "sha256": "e9c15e3fb4913c876e8cd076656a17560d779298cc6a6418ffcc8494cbca359f",
+      "bytes": 5880,
+      "sha256": "313dee269616e43ae0c7f4dc1744cb8eb603f215144829588e85f23bec91a77f",
       "role": "Regression test or fixture.",
       "exports": [],
       "imports": [
@@ -2824,10 +2829,11 @@
         "vitest"
       ],
       "tests": [
-        "asks for each picked type by its id, with the keys and units to give and the pages to read",
-        "takes the values in the catalogue form and marks red each one not printed on the page it names",
-        "reads a bare figure in the unit asked for, and an efficiency given in % against one printed as a fraction",
-        "names the type by the values when the answer leaves it out, and marks a row red whose page the file does not have",
+        "asks for every value under its printed heading, with the pages to read",
+        "picks the ticked parameters out of every value copied, and marks red each one not printed on the page it names",
+        "reads a bare figure in the parameter's unit, a unit in the heading, and a label the engineer taught",
+        "reads a thousands comma by the answer's decimals, and leaves a parameter two headings give differently for the engineer",
+        "names the type by the values, and marks a row red whose page the file does not have",
         "refuses an answer it cannot read, saying what to do"
       ],
       "runtime": false
@@ -5432,24 +5438,8 @@
       "relation": "external"
     }
   ],
-  "updatedAt": "2026-11-27T05:17:01.941Z",
+  "updatedAt": "2026-11-27T07:38:45.977Z",
   "history": [
-    {
-      "at": "2026-11-26T02:03:55.171Z",
-      "added": [],
-      "modified": [
-        "tests/rating-table-params.test.ts"
-      ],
-      "removed": []
-    },
-    {
-      "at": "2026-11-26T02:04:01.591Z",
-      "added": [],
-      "modified": [
-        "src/import/rating-table.ts"
-      ],
-      "removed": []
-    },
     {
       "at": "2026-11-26T02:04:02.213Z",
       "added": [],
@@ -5529,6 +5519,25 @@
     },
     {
       "at": "2026-11-27T05:17:01.941Z",
+      "added": [],
+      "modified": [
+        "docs/verification.json"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-27T07:37:18.645Z",
+      "added": [],
+      "modified": [
+        "src/import/copilot.ts",
+        "src/import/vocabulary.ts",
+        "src/ui/Catalogue.tsx",
+        "tests/copilot.test.ts"
+      ],
+      "removed": []
+    },
+    {
+      "at": "2026-11-27T07:38:45.977Z",
       "added": [],
       "modified": [
         "docs/verification.json"

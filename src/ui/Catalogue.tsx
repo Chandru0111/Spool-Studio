@@ -195,11 +195,11 @@ function PastePage({onRead,onClose}:{onRead:(text:string,source:string)=>void;on
 // The organisation's own AI chat (Copilot or another it allows) reads the datasheet; this page gives it the prompt and checks
 // its answer against the same file. Nothing is sent anywhere from here: the engineer copies the prompt over and pastes the
 // answer back.
-function AskCopilot({types,busy,onRead,onClose}:{types:readonly EquipmentType[];busy:boolean;onRead:(file:File,answer:string)=>void;onClose:()=>void}) {
+function AskCopilot({busy,onRead,onClose}:{busy:boolean;onRead:(file:File,answer:string)=>void;onClose:()=>void}) {
  const input=useRef<HTMLInputElement>(null),json=useRef<HTMLInputElement>(null),box=useRef<HTMLTextAreaElement>(null);
  const [file,setFile]=useState<File|null>(null),[total,setTotal]=useState(0),[pages,setPages]=useState(''),[answer,setAnswer]=useState(''),[copied,setCopied]=useState(false);
  let list:number[]=[],bad='';if(total&&pages.trim())try{list=pageList(pages,total);}catch(e){bad=message(e,'Check the pages.');}
- const prompt=copilotPrompt(types,rangesOf(list));
+ const prompt=copilotPrompt(rangesOf(list));
  useEffect(()=>{setCopied(false);},[prompt]);
  useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();onClose();}};addEventListener('keydown',key,true);return ()=>removeEventListener('keydown',key,true);},[onClose]);
  async function choose(f:File){setFile(f);setTotal(0);setPages('');try{if(/\.pdf$/i.test(f.name))setTotal(await pageCount(f));}catch(e){setFile(null);notify(message(e,'Could not open the file.'));}}
@@ -247,7 +247,7 @@ export function Catalogue() {
    const doc=await readCatalogue(f,p=>setBusy(p.message),ctl.signal,'equipment',isPdf?cited:undefined);
    setAsking(false);
    setRead({file:f.name,pages:doc.pages,ocr:doc.pages.filter(p=>p.mode==='ocr').length,proposals:checkAll(checkAnswer(a,doc.pages,f.name),types),brand:brand||a.brand,types,copilot:true,...(isPdf?{pdf:f,layout:doc.layout}:{})});
-   if(a.ignored)notify(`${a.ignored} item${a.ignored===1?'':'s'} in Copilot's answer ${a.ignored===1?'is':'are'} not for the picked types and parameters, so ${a.ignored===1?'it was':'they were'} left out.`);}
+   if(a.ignored)notify(`${a.ignored} row${a.ignored===1?'':'s'} in Copilot's answer ${a.ignored===1?'has':'have'} no model and none of the ticked parameters, so ${a.ignored===1?'it was':'they were'} left out.`);}
   catch(e){notify(message(e,'Could not read the answer.'));}finally{setBusy('');stop.current=null;}
  }
  async function openBook(f:File){
@@ -279,7 +279,7 @@ export function Catalogue() {
   {read&&<Review read={read} setRead={setRead} onClose={()=>{closePage();setRead(null);}}/>}
   {pasting&&<PastePage onRead={fromWeb} onClose={()=>setPasting(false)}/>}
   {picking&&<PagePicker file={picking.file} total={picking.total} onRead={pages=>{setPicking(null);void openPdf(picking.file,pages??null);}} onClose={()=>{setPicking(null);closePage();}}/>}
-  {asking&&<AskCopilot types={chosen.current} busy={!!busy} onRead={(f,a)=>void fromCopilot(f,a)} onClose={()=>{setAsking(false);closePage();}}/>}
+  {asking&&<AskCopilot busy={!!busy} onRead={(f,a)=>void fromCopilot(f,a)} onClose={()=>{setAsking(false);closePage();}}/>}
   {choosing&&<TypePicker pick={lastPick.value} setPick={p=>{lastPick.value=p;}} action={choosing==='pdf'?'Choose file':choosing==='copilot'?'Continue':'Paste the page'} onContinue={chose} onClose={()=>setChoosing(null)}/>}
   {busy&&<div class="reading-bar" role="status"><Network size={15}/><span>{busy}</span>{stop.current&&<button class="button secondary small" onClick={()=>stop.current?.abort()}>Cancel</button>}</div>}
   <div class="sheet-section-head"><div><h2>Brand catalogue</h2><p>One row per Brand + Model + Configuration. A load list row that picks them fills in the rest. Saved with the project; export it to reuse in other projects.</p></div>
